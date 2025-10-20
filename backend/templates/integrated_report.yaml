@@ -1,0 +1,159 @@
+# 統合報告書テンプレート
+# IIRC（国際統合報告評議会）のフレームワークに基づく記載項目
+
+document_type: integrated_report
+display_name: 統合報告書
+description: 企業の財務・非財務情報を統合的に報告する任意開示書類
+
+sections:
+  - id: ceo_message
+    name: トップメッセージ
+    required: true
+    alternative_names:
+      - 社長メッセージ
+      - 代表挨拶
+      - CEOメッセージ
+    items:
+      - 経営方針
+      - 中長期ビジョン
+      - ステークホルダーへのメッセージ
+  
+  - id: value_creation
+    name: 価値創造プロセス
+    required: true
+    alternative_names:
+      - ビジネスモデル
+      - 価値創造モデル
+    items:
+      - ビジネスモデルの概要
+      - 経営資本（6つの資本）
+      - バリューチェーン
+      - アウトプット・アウトカム
+  
+  - id: strategy
+    name: 戦略
+    required: true
+    subsections:
+      - id: management_strategy
+        name: 経営戦略
+        required: true
+        items:
+          - 中期経営計画
+          - 成長戦略
+          - 重点施策
+      
+      - id: sustainability_strategy
+        name: サステナビリティ戦略
+        required: true
+        items:
+          - マテリアリティ（重要課題）
+          - SDGsへの貢献
+          - ESG目標とKPI
+  
+  - id: business_overview
+    name: 事業概要
+    required: true
+    items:
+      - 事業セグメント
+      - 主要製品・サービス
+      - 市場環境
+      - 競合優位性
+  
+  - id: financial_info
+    name: 財務情報
+    required: true
+    items:
+      - 業績ハイライト
+      - 財務データサマリー
+      - 主要財務指標の推移
+    tables:
+      - 連結損益計算書
+      - 連結貸借対照表
+      - 連結キャッシュ・フロー計算書
+  
+  - id: esg_info
+    name: ESG情報
+    required: true
+    subsections:
+      - id: environment
+        name: 環境（E）
+        required: true
+        items:
+          - 気候変動対応
+          - カーボンニュートラル目標
+          - 環境マネジメント
+          - 資源循環
+          - 生物多様性
+      
+      - id: social
+        name: 社会（S）
+        required: true
+        items:
+          - 人権尊重
+          - 人材育成
+          - ダイバーシティ&インクルージョン
+          - 労働安全衛生
+          - サプライチェーンマネジメント
+          - 地域社会貢献
+      
+      - id: governance
+        name: ガバナンス（G）
+        required: true
+        items:
+          - コーポレートガバナンス体制
+          - 取締役会の構成
+          - 内部統制
+          - リスクマネジメント
+          - コンプライアンス
+  
+  - id: risks_opportunities
+    name: リスクと機会
+    required: true
+    items:
+      - 事業リスク
+      - 機会の認識
+      - リスク対応策
+  
+  - id: performance
+    name: パフォーマンス
+    required: true
+    items:
+      - 財務パフォーマンス
+      - 非財務パフォーマンス
+      - ESG指標
+      - KPI達成状況
+  
+  - id: governance_detail
+    name: ガバナンス
+    required: true
+    items:
+      - 役員一覧
+      - 役員報酬
+      - 株主との対話
+  
+  - id: data_section
+    name: データセクション
+    required: true
+    items:
+      - 11年間の財務データ
+      - ESGデータ
+      - 会社情報
+      - 株式情報
+
+important_sections:
+  - ceo_message
+  - value_creation
+  - strategy
+  - esg_info
+  - risks_opportunities
+
+keywords_for_detection:
+  - 統合報告書
+  - Integrated Report
+  - 価値創造
+  - サステナビリティ
+  - ESG
+  - マテリアリティ
+  - ステークホルダー
+
+

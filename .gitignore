@@ -1,0 +1,121 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Cursor
+.cursor/
+
+# Serena
+.serena/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Node.js / Frontend
+node_modules/
+.next/
+out/
+.cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Next.js build output
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# Logs
+*.log
+logs/
+*.out.log
+*.err.log
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Storage directories (uploaded files, metadata, comparisons)
+backend/storage/uploads/*.pdf
+backend/storage/metadata/*.json
+backend/storage/comparisons/*.json
+storage/uploads/*.pdf
+storage/metadata/*.json
+storage/comparisons/*.json
+
+# Keep directory structure but ignore contents
+!backend/storage/uploads/.gitkeep
+!backend/storage/metadata/.gitkeep
+!backend/storage/comparisons/.gitkeep
+!storage/uploads/.gitkeep
+!storage/metadata/.gitkeep
+!storage/comparisons/.gitkeep
+
+# Test data PDFs
+data/*.pdf
+!data/.gitkeep
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Docker
+*.env.docker
+
+# Backup files
+*.bak
+*.backup
+
+# Temporary files
+*.tmp
+tmp/
+temp/
+

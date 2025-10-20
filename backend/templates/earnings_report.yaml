@@ -1,0 +1,112 @@
+# 決算短信テンプレート
+# 東京証券取引所の標準フォーマットに基づく記載項目
+
+document_type: earnings_report
+display_name: 決算短信
+description: 上場企業が四半期・年度決算後に速やかに開示する業績速報
+
+sections:
+  - id: summary_info
+    name: サマリー情報
+    required: true
+    items:
+      - 会社名
+      - コード番号
+      - 代表者
+      - 問合せ先責任者
+      - 決算発表日
+      - 配当予想
+      - 決算補足説明資料の有無
+      - 決算説明会開催の有無
+  
+  - id: financial_results
+    name: 決算に関する事項
+    required: true
+    subsections:
+      - id: consolidated_results
+        name: 連結経営成績
+        required: true
+        items:
+          - 売上高
+          - 営業利益
+          - 経常利益
+          - 当期純利益
+          - 1株当たり当期純利益
+          - 自己資本当期純利益率（ROE）
+      
+      - id: financial_position
+        name: 連結財政状態
+        required: true
+        items:
+          - 総資産
+          - 純資産
+          - 自己資本比率
+          - 1株当たり純資産
+      
+      - id: cash_flow
+        name: 連結キャッシュ・フローの状況
+        required: true
+        items:
+          - 営業活動によるキャッシュ・フロー
+          - 投資活動によるキャッシュ・フロー
+          - 財務活動によるキャッシュ・フロー
+          - 現金及び現金同等物期末残高
+  
+  - id: forecast
+    name: 連結業績予想
+    required: true
+    items:
+      - 次期売上高予想
+      - 次期営業利益予想
+      - 次期経常利益予想
+      - 次期当期純利益予想
+      - 次期1株当たり当期純利益予想
+  
+  - id: notes
+    name: 注記事項
+    required: true
+    items:
+      - 期中における重要な子会社の異動
+      - 会計方針の変更・会計上の見積りの変更・修正再表示
+      - 発行済株式数
+  
+  - id: qualitative_info
+    name: 定性的情報・財務諸表等
+    required: true
+    subsections:
+      - id: management_analysis
+        name: 経営成績に関する説明
+        required: true
+      
+      - id: financial_analysis
+        name: 財政状態に関する説明
+        required: true
+      
+      - id: future_outlook
+        name: 今後の見通し
+        required: true
+      
+      - id: financial_statements
+        name: 連結財務諸表
+        required: true
+        tables:
+          - 連結貸借対照表
+          - 連結損益計算書及び連結包括利益計算書
+          - 連結株主資本等変動計算書
+          - 連結キャッシュ・フロー計算書
+          - 連結財務諸表に関する注記事項
+
+important_sections:
+  - consolidated_results
+  - financial_position
+  - forecast
+  - management_analysis
+
+keywords_for_detection:
+  - 決算短信
+  - 連結業績
+  - 四半期決算
+  - 年度決算
+  - サマリー情報
+
+

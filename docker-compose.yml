@@ -1,0 +1,88 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: disclosure_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - disclosure_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: disclosure_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_REDIS_URL=redis://redis:6379/0
+      - APP_CELERY_BROKER_URL=redis://redis:6379/0
+      - APP_CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - APP_OPENAI_API_KEY=${APP_OPENAI_API_KEY}
+      - APP_OPENAI_MODEL=${APP_OPENAI_MODEL:-gpt-5-mini}
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+      - backend_storage:/app/storage
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - disclosure_network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: disclosure_celery_worker
+    environment:
+      - APP_REDIS_URL=redis://redis:6379/0
+      - APP_CELERY_BROKER_URL=redis://redis:6379/0
+      - APP_CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - APP_OPENAI_API_KEY=${APP_OPENAI_API_KEY}
+      - APP_OPENAI_MODEL=${APP_OPENAI_MODEL:-gpt-5-mini}
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+      - backend_storage:/app/storage
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - disclosure_network
+    command: celery -A app.workers.celery_app worker --loglevel=info --pool=solo
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: disclosure_frontend
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - disclosure_network
+    command: npm run dev
+
+volumes:
+  redis_data:
+  backend_storage:
+
+networks:
+  disclosure_network:
+    driver: bridge
+

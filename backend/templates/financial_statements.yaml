@@ -1,0 +1,114 @@
+# 計算書類テンプレート
+# 会社法に基づく株主総会用の財務諸表
+
+document_type: financial_statements
+display_name: 計算書類
+description: 会社法に基づき株主総会で承認を得るための財務諸表
+
+sections:
+  - id: balance_sheet
+    name: 貸借対照表
+    required: true
+    alternative_names:
+      - B/S
+      - バランスシート
+    subsections:
+      - id: assets
+        name: 資産の部
+        required: true
+        items:
+          - 流動資産
+          - 固定資産
+          - 繰延資産
+      
+      - id: liabilities
+        name: 負債の部
+        required: true
+        items:
+          - 流動負債
+          - 固定負債
+      
+      - id: net_assets
+        name: 純資産の部
+        required: true
+        items:
+          - 株主資本
+          - 評価・換算差額等
+          - 新株予約権
+  
+  - id: income_statement
+    name: 損益計算書
+    required: true
+    alternative_names:
+      - P/L
+      - 損益計算書
+    items:
+      - 売上高
+      - 売上原価
+      - 売上総利益
+      - 販売費及び一般管理費
+      - 営業利益
+      - 営業外収益
+      - 営業外費用
+      - 経常利益
+      - 特別利益
+      - 特別損失
+      - 税引前当期純利益
+      - 法人税等
+      - 当期純利益
+  
+  - id: statement_of_changes
+    name: 株主資本等変動計算書
+    required: true
+    alternative_names:
+      - S/S
+    items:
+      - 株主資本
+      - 評価・換算差額等
+      - 新株予約権
+      - 当期首残高
+      - 当期変動額
+      - 当期末残高
+  
+  - id: notes
+    name: 個別注記表
+    required: true
+    items:
+      - 重要な会計方針
+      - 会計方針の変更
+      - 表示方法の変更
+      - 貸借対照表に関する注記
+      - 損益計算書に関する注記
+      - 株主資本等変動計算書に関する注記
+      - リース取引に関する注記
+      - 関連当事者との取引に関する注記
+      - 税効果会計に関する注記
+      - 退職給付に関する注記
+      - 資産除去債務に関する注記
+      - セグメント情報等
+      - 重要な後発事象
+  
+  - id: supplementary
+    name: 附属明細書
+    required: false
+    items:
+      - 有形固定資産等明細表
+      - 引当金明細表
+      - 販売費及び一般管理費明細表
+
+important_sections:
+  - balance_sheet
+  - income_statement
+  - statement_of_changes
+  - notes
+
+keywords_for_detection:
+  - 計算書類
+  - 貸借対照表
+  - 損益計算書
+  - 株主資本等変動計算書
+  - 個別注記表
+  - 会社法
+  - 株主総会
+
+
