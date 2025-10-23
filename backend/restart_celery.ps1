@@ -1,8 +1,8 @@
-# Celeryワーカーを再起動するスクリプト
+# Restart Celery Worker Script
 
-Write-Host "既存のCeleryワーカープロセスを停止しています..." -ForegroundColor Yellow
+Write-Host "Stopping existing Celery worker processes..." -ForegroundColor Yellow
 
-# Celeryプロセスを探して停止
+# Find and stop Celery processes
 $celeryProcesses = Get-Process | Where-Object { 
     $_.ProcessName -eq "python" -and 
     $_.CommandLine -like "*celery*worker*" 
@@ -10,18 +10,20 @@ $celeryProcesses = Get-Process | Where-Object {
 
 if ($celeryProcesses) {
     $celeryProcesses | Stop-Process -Force
-    Write-Host "Celeryワーカーを停止しました" -ForegroundColor Green
+    Write-Host "Celery worker stopped" -ForegroundColor Green
     Start-Sleep -Seconds 2
 } else {
-    Write-Host "実行中のCeleryワーカーが見つかりませんでした" -ForegroundColor Yellow
+    Write-Host "No running Celery worker found" -ForegroundColor Yellow
 }
 
-Write-Host "`n仮想環境をアクティブ化しています..." -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Activating virtual environment..." -ForegroundColor Cyan
 & .\.venv\Scripts\Activate.ps1
 
-Write-Host "`nCeleryワーカーを起動しています..." -ForegroundColor Cyan
-Write-Host "終了するには Ctrl+C を押してください`n" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "Starting Celery worker..." -ForegroundColor Cyan
+Write-Host "Press Ctrl+C to stop"
+Write-Host ""
 
 cd backend
 celery -A app.workers.celery_app worker --loglevel=info --pool=solo
-

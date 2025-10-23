@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-import { listDocuments, getDocument, uploadDocuments, updateDocumentType, compareDocuments, getComparisonStatus, getComparisonResult } from "@/lib/api";
+import { listDocuments, getDocument, uploadDocuments, updateDocumentType, deleteDocument, listComparisons, compareDocuments, getComparisonStatus, getComparisonResult } from "@/lib/api";
 import { DOCUMENT_TYPE_OPTIONS, findDocumentLabel } from "@/lib/document-types";
 import { MAX_UPLOAD_FILES, MAX_UPLOAD_SIZE_MB } from "@/lib/config";
 import type { DocumentUploadResult, DocumentUploadResponse } from "@/lib/types";
@@ -34,207 +34,161 @@ function StructuredDataDisplay({ document }: { document: DocumentUploadResult })
   return (
     <div className="mt-4 space-y-2">
       {/* サマリー */}
-      <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10">
-        <button
-          type="button"
-          onClick={() => toggleSection("summary")}
-          className="flex w-full items-center justify-between px-4 py-3 text-left"
-        >
-          <h4 className="text-sm font-semibold text-emerald-200">構造化データ サマリー</h4>
-          <span className="text-emerald-200">{expandedSections.summary ? "▼" : "▶"}</span>
-        </button>
-        {expandedSections.summary && (
-          <div className="border-t border-emerald-500/40 px-4 py-3">
-            <div className="grid gap-2 text-xs text-emerald-100 md:grid-cols-3">
-              <div>
-                <span className="font-medium">抽出方法:</span>{" "}
-                {document.extraction_method === "text"
-                  ? "テキスト抽出"
-                  : document.extraction_method === "vision"
-                    ? "画像解析"
-                    : document.extraction_method === "hybrid"
-                      ? "ハイブリッド"
-                      : document.extraction_method ?? "不明"}
-              </div>
-              <div>
-                <span className="font-medium">ページ数:</span> {pages.length} ページ
-              </div>
-              <div>
-                <span className="font-medium">テーブル数:</span> {tables.length} 個
-              </div>
-              <div className="md:col-span-3">
-                <span className="font-medium">全文字数:</span>{" "}
-                {sd.full_text?.length?.toLocaleString() ?? 0} 文字
-              </div>
+      <details className="rounded-lg border border-white/20 bg-white/5" open>
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-white hover:bg-white/5">
+          Structured Data Summary
+        </summary>
+        <div className="border-t border-white/10 px-4 py-3">
+          <div className="grid gap-3 text-xs text-white/70 md:grid-cols-3">
+            <div>
+              <span className="font-medium text-white/90">Extraction:</span>{" "}
+              {document.extraction_method === "text"
+                ? "Text"
+                : document.extraction_method === "vision"
+                  ? "Vision"
+                  : document.extraction_method === "hybrid"
+                    ? "Hybrid"
+                    : document.extraction_method ?? "Unknown"}
+            </div>
+            <div>
+              <span className="font-medium text-white/90">Pages:</span> {pages.length}
+            </div>
+            <div>
+              <span className="font-medium text-white/90">Tables:</span> {tables.length}
+            </div>
+            <div className="md:col-span-3">
+              <span className="font-medium text-white/90">Characters:</span>{" "}
+              {sd.full_text?.length?.toLocaleString() ?? 0}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      </details>
 
       {/* ページ詳細 */}
       {pages.length > 0 && (
-        <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10">
-          <button
-            type="button"
-            onClick={() => toggleSection("pages")}
-            className="flex w-full items-center justify-between px-4 py-3 text-left"
-          >
-            <h4 className="text-sm font-semibold text-emerald-200">
-              ページ詳細 ({pages.length} ページ)
-            </h4>
-            <span className="text-emerald-200">{expandedSections.pages ? "▼" : "▶"}</span>
-          </button>
-          {expandedSections.pages && (
-            <div className="max-h-96 overflow-y-auto border-t border-emerald-500/40 px-4 py-3">
-              <div className="space-y-3">
-                {pages.slice(0, 10).map((page, idx) => (
-                  <details key={idx} className="rounded border border-emerald-500/30 bg-emerald-500/5">
-                    <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-emerald-100 hover:bg-emerald-500/10">
-                      ページ {page.page_number} - {page.char_count?.toLocaleString() ?? 0} 文字
-                      {page.has_images && " 📷"}
-                    </summary>
-                    <div className="border-t border-emerald-500/30 px-3 py-2">
-                      <pre className="max-h-40 overflow-auto whitespace-pre-wrap text-[10px] leading-relaxed text-emerald-50">
-                        {page.text?.substring(0, 500) ?? ""}
-                        {(page.text?.length ?? 0) > 500 && "..."}
-                      </pre>
-                    </div>
-                  </details>
-                ))}
-                {pages.length > 10 && (
-                  <p className="text-xs text-emerald-200/70">
-                    ... 他 {pages.length - 10} ページ（最初の10ページのみ表示）
-                  </p>
-                )}
-              </div>
+        <details className="rounded-lg border border-white/20 bg-white/5">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-white hover:bg-white/5">
+            Pages ({pages.length})
+          </summary>
+          <div className="max-h-96 overflow-y-auto border-t border-white/10 px-4 py-3">
+            <div className="space-y-2">
+              {pages.slice(0, 10).map((page, idx) => (
+                <details key={idx} className="rounded border border-white/10 bg-white/5">
+                  <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-white/80 hover:bg-white/10">
+                    Page {page.page_number} - {page.char_count?.toLocaleString() ?? 0} chars
+                    {page.has_images && " (images)"}
+                  </summary>
+                  <div className="border-t border-white/10 px-3 py-2">
+                    <pre className="max-h-40 overflow-auto whitespace-pre-wrap text-[10px] leading-relaxed text-white/70">
+                      {page.text?.substring(0, 500) ?? ""}
+                      {(page.text?.length ?? 0) > 500 && "..."}
+                    </pre>
+                  </div>
+                </details>
+              ))}
+              {pages.length > 10 && (
+                <p className="text-xs text-white/50">
+                  ... {pages.length - 10} more pages
+                </p>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        </details>
       )}
 
       {/* セクション検出結果 */}
-      {sd.sections && Object.keys(sd.sections).length > 0 && (
-        <div className="rounded-lg border border-blue-500/40 bg-blue-500/10">
-          <button
-            type="button"
-            onClick={() => toggleSection("sections" as any)}
-            className="flex w-full items-center justify-between px-4 py-3 text-left"
-          >
-            <h4 className="text-sm font-semibold text-blue-200">
-              検出されたセクション ({Object.keys(sd.sections).length} 個)
-            </h4>
-            <span className="text-blue-200">{(expandedSections as any).sections ? "▼" : "▶"}</span>
-          </button>
-          {(expandedSections as any).sections && (
-            <div className="max-h-96 overflow-y-auto border-t border-blue-500/40 px-4 py-3">
-              <div className="space-y-2">
-                {Object.entries(sd.sections).map(([sectionName, sectionInfo]: [string, any]) => (
-                  <div key={sectionName} className="rounded border border-blue-500/30 bg-blue-500/5 px-3 py-2">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-xs font-medium text-blue-100">{sectionName}</p>
-                        <p className="text-[10px] text-blue-100/60">
-                          ページ {sectionInfo.start_page}-{sectionInfo.end_page}
-                          {" "}
-                          ({sectionInfo.char_count?.toLocaleString() ?? 0} 文字)
-                          {" "}
-                          信頼度: {((sectionInfo.confidence ?? 0) * 100).toFixed(0)}%
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+      {(sd as any).sections && Object.keys((sd as any).sections).length > 0 && (
+        <details className="rounded-lg border border-white/20 bg-white/5">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-white hover:bg-white/5">
+            Detected Sections ({Object.keys((sd as any).sections).length})
+          </summary>
+          <div className="max-h-96 overflow-y-auto border-t border-white/10 px-4 py-3">
+            <div className="space-y-1.5">
+              {Object.entries((sd as any).sections).map(([sectionName, sectionInfo]: [string, any]) => (
+                <div key={sectionName} className="border-b border-white/5 py-2 last:border-0">
+                  <p className="text-xs font-medium text-white">{sectionName}</p>
+                  <p className="mt-0.5 text-[10px] text-white/50">
+                    Pages {sectionInfo.start_page}-{sectionInfo.end_page}
+                    {" · "}
+                    {sectionInfo.char_count?.toLocaleString() ?? 0} chars
+                    {" · "}
+                    {((sectionInfo.confidence ?? 0) * 100).toFixed(0)}% confidence
+                  </p>
+                </div>
+              ))}
             </div>
-          )}
-        </div>
+          </div>
+        </details>
       )}
 
       {/* テーブル詳細 */}
       {tables.length > 0 && (
-        <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10">
-          <button
-            type="button"
-            onClick={() => toggleSection("tables")}
-            className="flex w-full items-center justify-between px-4 py-3 text-left"
-          >
-            <h4 className="text-sm font-semibold text-emerald-200">
-              テーブル詳細 ({tables.length} 個)
-            </h4>
-            <span className="text-emerald-200">{expandedSections.tables ? "▼" : "▶"}</span>
-          </button>
-          {expandedSections.tables && (
-            <div className="max-h-96 overflow-y-auto border-t border-emerald-500/40 px-4 py-3">
-              <div className="space-y-3">
-                {tables.slice(0, 5).map((table, idx) => (
-                  <details key={idx} className="rounded border border-emerald-500/30 bg-emerald-500/5">
-                    <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-emerald-100 hover:bg-emerald-500/10">
-                      テーブル {idx + 1} (ページ {table.page_number}) - {table.row_count} 行 ×{" "}
-                      {table.column_count} 列
-                    </summary>
-                    <div className="border-t border-emerald-500/30 px-3 py-2">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-[10px] text-emerald-50">
-                          <thead>
-                            <tr className="border-b border-emerald-500/30">
-                              {table.header?.map((h, i) => (
-                                <th key={i} className="px-2 py-1 text-left font-medium">
-                                  {h || `列${i + 1}`}
-                                </th>
+        <details className="rounded-lg border border-white/20 bg-white/5">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-white hover:bg-white/5">
+            Tables ({tables.length})
+          </summary>
+          <div className="max-h-96 overflow-y-auto border-t border-white/10 px-4 py-3">
+            <div className="space-y-2">
+              {tables.slice(0, 5).map((table, idx) => (
+                <details key={idx} className="rounded border border-white/10 bg-white/5">
+                  <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-white/80 hover:bg-white/10">
+                    Table {idx + 1} (Page {table.page_number}) - {table.row_count} × {table.column_count}
+                  </summary>
+                  <div className="border-t border-white/10 px-3 py-2">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[10px] text-white/70">
+                        <thead>
+                          <tr className="border-b border-white/10">
+                            {table.header?.map((h, i) => (
+                              <th key={i} className="px-2 py-1 text-left font-medium text-white/90">
+                                {h || `Col ${i + 1}`}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {table.rows?.slice(0, 5).map((row, i) => (
+                            <tr key={i} className="border-b border-white/5">
+                              {row.map((cell, j) => (
+                                <td key={j} className="px-2 py-1">
+                                  {cell}
+                                </td>
                               ))}
                             </tr>
-                          </thead>
-                          <tbody>
-                            {table.rows?.slice(0, 5).map((row, i) => (
-                              <tr key={i} className="border-b border-emerald-500/20">
-                                {row.map((cell, j) => (
-                                  <td key={j} className="px-2 py-1">
-                                    {cell}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                        {(table.rows?.length ?? 0) > 5 && (
-                          <p className="mt-2 text-[10px] text-emerald-200/70">
-                            ... 他 {(table.rows?.length ?? 0) - 5} 行
-                          </p>
-                        )}
-                      </div>
+                          ))}
+                        </tbody>
+                      </table>
+                      {(table.rows?.length ?? 0) > 5 && (
+                        <p className="mt-2 text-[10px] text-white/50">
+                          ... {(table.rows?.length ?? 0) - 5} more rows
+                        </p>
+                      )}
                     </div>
-                  </details>
-                ))}
-                {tables.length > 5 && (
-                  <p className="text-xs text-emerald-200/70">
-                    ... 他 {tables.length - 5} テーブル（最初の5個のみ表示）
-                  </p>
-                )}
-              </div>
+                  </div>
+                </details>
+              ))}
+              {tables.length > 5 && (
+                <p className="text-xs text-white/50">
+                  ... {tables.length - 5} more tables
+                </p>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        </details>
       )}
 
       {/* 抽出メタデータ */}
       {document.extraction_metadata && (
-        <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10">
-          <button
-            type="button"
-            onClick={() => toggleSection("metadata")}
-            className="flex w-full items-center justify-between px-4 py-3 text-left"
-          >
-            <h4 className="text-sm font-semibold text-emerald-200">抽出メタデータ</h4>
-            <span className="text-emerald-200">{expandedSections.metadata ? "▼" : "▶"}</span>
-          </button>
-          {expandedSections.metadata && (
-            <div className="border-t border-emerald-500/40 px-4 py-3">
-              <pre className="max-h-60 overflow-auto text-[10px] text-emerald-50">
-                {JSON.stringify(document.extraction_metadata, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
+        <details className="rounded-lg border border-white/20 bg-white/5">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-white hover:bg-white/5">
+            Extraction Metadata
+          </summary>
+          <div className="border-t border-white/10 px-4 py-3">
+            <pre className="max-h-60 overflow-auto text-[10px] text-white/70">
+              {JSON.stringify(document.extraction_metadata, null, 2)}
+            </pre>
+          </div>
+        </details>
       )}
     </div>
   );
@@ -292,6 +246,28 @@ export default function HomePage() {
   const [comparisonStatus, setComparisonStatus] = useState<string>("");
   const [currentSection, setCurrentSection] = useState<string>("");
   const [sectionProgress, setSectionProgress] = useState<{completed: number, total: number} | null>(null);
+  
+  // 比較結果フィルタリング用のstate
+  const [importanceFilter, setImportanceFilter] = useState<"all" | "high" | "medium" | "low">("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // タブ切り替え用のstate
+  const [activeTab, setActiveTab] = useState<"documents" | "comparison">("documents");
+  
+  // 比較履歴用のstate
+  const [comparisonHistory, setComparisonHistory] = useState<Array<{
+    comparison_id: string;
+    created_at: string;
+    mode: string;
+    doc1_filename: string;
+    doc2_filename: string;
+    section_count: number;
+  }>>([]);
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
+  
+  // 削除機能用のstate
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const maxBytes = useMemo(() => limits.max_file_size_mb * 1024 * 1024, [limits.max_file_size_mb]);
   const totalSelectedSize = useMemo(
@@ -326,10 +302,51 @@ export default function HomePage() {
     }
   }, []);
 
+  // 比較履歴を読み込む
+  const loadComparisonHistory = useCallback(async () => {
+    try {
+      const history = await listComparisons();
+      setComparisonHistory(history);
+    } catch (error) {
+      console.error("比較履歴の読み込みに失敗:", error);
+    }
+  }, []);
+
   // ページロード時にドキュメント一覧を読み込む
   useEffect(() => {
     loadDocuments();
-  }, [loadDocuments]);
+    loadComparisonHistory();
+  }, [loadDocuments, loadComparisonHistory]);
+  
+  // ドキュメント削除処理
+  const handleDelete = useCallback(async (documentId: string) => {
+    console.log("削除処理開始:", documentId);
+    setIsDeleting(true);
+    setErrorMessage(null);
+    
+    try {
+      console.log("deleteDocument API呼び出し中...");
+      await deleteDocument(documentId);
+      console.log("削除成功:", documentId);
+      
+      // 削除成功後、リストから削除
+      setResults((prev) => prev.filter((doc) => doc.document_id !== documentId));
+      // 選択リストからも削除
+      setSelectedDocIds((prev) => {
+        const next = new Set(prev);
+        next.delete(documentId);
+        return next;
+      });
+      setDeleteConfirmId(null);
+    } catch (error) {
+      console.error("削除エラー:", error);
+      const message = error instanceof Error ? error.message : "削除に失敗しました";
+      setErrorMessage(message);
+      setDeleteConfirmId(null); // エラー時もダイアログを閉じる
+    } finally {
+      setIsDeleting(false);
+    }
+  }, []);
   
   // ドキュメント選択のトグル
   const toggleDocSelection = useCallback((docId: string) => {
@@ -396,8 +413,13 @@ export default function HomePage() {
           // Step 3: 結果を取得
           const result = await getComparisonResult(comparisonId);
           setComparisonResult(result);
+          setSelectedHistoryId(comparisonId);
           setIsComparing(false);
           setComparisonStatus("完了");
+          // 比較履歴を再読み込み
+          await loadComparisonHistory();
+          // 比較結果タブに自動切り替え
+          setActiveTab("comparison");
         } else if (status.status === "failed") {
           throw new Error(status.error || "比較処理に失敗しました");
         } else {
@@ -412,7 +434,7 @@ export default function HomePage() {
       setComparisonError(error instanceof Error ? error.message : "比較に失敗しました");
       setIsComparing(false);
     }
-  }, [selectedDocIds]);
+  }, [selectedDocIds, loadComparisonHistory]);
 
   const handleFiles = useCallback(
     (incomingList: FileList | File[]) => {
@@ -572,54 +594,70 @@ export default function HomePage() {
   useEffect(() => {
     if (results.length === 0) return;
 
-    const pendingDocuments = results.filter(
-      (doc) =>
-        doc.document_id &&
-        doc.processing_status &&
-        ["queued", "processing", "extracting_text", "extracting_vision", "extracting_tables", "detecting_sections"].includes(doc.processing_status),
-    );
-
-    if (pendingDocuments.length === 0) return;
-
     const interval = setInterval(async () => {
+      // 毎回最新の results から pendingDocuments を計算
+      const currentPendingDocuments = results.filter(
+        (doc) =>
+          doc.document_id &&
+          doc.processing_status &&
+          ["queued", "processing", "extracting_text", "extracting_vision", "extracting_tables", "detecting_sections"].includes(doc.processing_status),
+      );
+
+      // ポーリング対象がない場合はスキップ
+      if (currentPendingDocuments.length === 0) {
+        return;
+      }
+
+      console.log(`Polling ${currentPendingDocuments.length} documents:`, currentPendingDocuments.map(d => d.document_id));
+
       const updates = await Promise.allSettled(
-        pendingDocuments.map(async (doc) => {
-          if (!doc.document_id) return null;
+        currentPendingDocuments.map(async (doc) => {
+          if (!doc.document_id) return { doc_id: null, data: null, error: null };
           try {
             const response = await getDocument(doc.document_id);
-            return response.document;
-          } catch {
-            return null;
+            return { doc_id: doc.document_id, data: response.document, error: null };
+          } catch (error) {
+            // 404エラー（削除済み）の場合
+            if (error instanceof Error && (error.message.includes("not found") || error.message.includes("404"))) {
+              console.log(`Document ${doc.document_id} was deleted (404), removing from list`);
+              return { doc_id: doc.document_id, data: null, error: "deleted" };
+            }
+            console.error(`Error polling document ${doc.document_id}:`, error);
+            return { doc_id: doc.document_id, data: null, error: "fetch_error" };
           }
         }),
       );
 
-      let hasUpdates = false;
-      setResults((prev) =>
-        prev.map((item) => {
-          const index = pendingDocuments.findIndex((p) => p.document_id === item.document_id);
-          if (index === -1) return item;
-
-          const result = updates[index];
-          if (result.status === "fulfilled" && result.value) {
-            hasUpdates = true;
-            return result.value;
+      let hasChanges = false;
+      setResults((prev) => {
+        let updated = [...prev];
+        
+        updates.forEach((result, index) => {
+          if (result.status !== "fulfilled") return;
+          
+          const updateInfo = result.value;
+          if (!updateInfo || !updateInfo.doc_id) return;
+          
+          const docIndex = updated.findIndex(item => item.document_id === updateInfo.doc_id);
+          if (docIndex === -1) return;
+          
+          if (updateInfo.error === "deleted") {
+            // 削除されたドキュメントを除外
+            console.log(`Removing deleted document from list: ${updateInfo.doc_id}`);
+            updated = updated.filter(item => item.document_id !== updateInfo.doc_id);
+            hasChanges = true;
+          } else if (updateInfo.data) {
+            // 更新されたデータで置き換え
+            updated[docIndex] = updateInfo.data;
+            hasChanges = true;
           }
-          return item;
-        }),
-      );
+        });
+        
+        return updated;
+      });
 
-      if (hasUpdates) {
-        // すべてのドキュメントが完了またはエラーになったかチェック
-        const stillPending = results.some(
-          (doc) =>
-            doc.document_id &&
-            doc.processing_status &&
-            ["queued", "processing", "extracting_text", "extracting_vision", "extracting_tables", "detecting_sections"].includes(doc.processing_status),
-        );
-        if (!stillPending) {
-          clearInterval(interval);
-        }
+      if (hasChanges) {
+        console.log("Document list updated");
       }
     }, 5000); // 5秒ごとにポーリング
 
@@ -628,23 +666,11 @@ export default function HomePage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-10 px-6 py-16">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold tracking-tight text-white">開示文書アップロード</h1>
-        <p className="text-base text-white/70">
-          最大 {limits.max_files} 件の PDF をアップロードし、書類種別の自動判定と初期検証を開始します。
+      <header className="space-y-3 border-b border-white/10 pb-6">
+        <h1 className="text-3xl font-semibold tracking-tight text-white">Disclosure Document Agent</h1>
+        <p className="text-sm leading-relaxed text-white/60">
+          開示文書の自動判定、構造化、比較分析を行うGenAIベースのツールです。
         </p>
-        <div className="text-sm text-white/50">
-          サイズ上限: {limits.max_file_size_mb}MB / FastAPI エンドポイント:
-          <code className="mx-2 rounded bg-white/10 px-1.5 py-0.5 text-xs text-white">
-            POST /api/documents/
-          </code>
-          <Link
-            className="inline-flex items-center justify-center rounded-md border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-white transition hover:bg-white/20"
-            href="/api/docs"
-          >
-            API ドキュメントを見る
-          </Link>
-        </div>
       </header>
 
       <section>
@@ -653,25 +679,26 @@ export default function HomePage() {
           onDragLeave={handleDragLeave}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
-          className={`relative flex min-h-[220px] flex-col items-center justify-center rounded-2xl border-2 border-dashed px-8 transition ${
-            isDragging ? "border-emerald-400/60 bg-emerald-400/10" : "border-white/10 bg-white/5"
+          className={`relative flex min-h-[220px] flex-col items-center justify-center rounded-lg border-2 border-dashed px-8 transition ${
+            isDragging ? "border-white/40 bg-white/10" : "border-white/20 bg-white/5"
           }`}
         >
-          <div className="pointer-events-none absolute inset-0 rounded-2xl bg-white/5 blur-xl" />
-          <div className="relative z-10 flex flex-col items-center gap-4 text-center text-white">
-            <p className="text-xl font-medium">ドラッグ＆ドロップ、またはファイルを選択</p>
-            <p className="max-w-lg text-sm text-white/70">
-              PDF 形式のみサポートしています。圧縮ファイルや他形式はアップロード前に変換してください。
+          <div className="relative z-10 flex flex-col items-center gap-4 text-center">
+            <p className="text-xl font-medium text-white">Drag & Drop or Click to Select</p>
+            <p className="max-w-lg text-sm text-white/60">
+              PDF files only. Convert other formats before uploading.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-white/50">
-              <span>最大 {limits.max_files} ファイル</span>
-              <span>1 ファイル {limits.max_file_size_mb}MB まで</span>
+              <span>Max {limits.max_files} files</span>
+              <span>·</span>
+              <span>Up to {limits.max_file_size_mb}MB each</span>
+              <span>·</span>
               <span>
-                現在選択: {selectedFiles.length} ファイル / {bytesToMegabytes(totalSelectedSize)}
+                Selected: {selectedFiles.length} / {bytesToMegabytes(totalSelectedSize)}
               </span>
             </div>
-            <label className="relative inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-white/10 bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/20">
-              ファイルを選択
+            <label className="relative inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20">
+              Browse Files
               <input
                 type="file"
                 accept="application/pdf"
@@ -683,43 +710,42 @@ export default function HomePage() {
           </div>
         </div>
         {errorMessage ? (
-          <p className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          <p className="mt-3 rounded-md border border-white/20 bg-white/5 px-3 py-2 text-sm text-white/80">
             {errorMessage}
           </p>
         ) : null}
       </section>
 
       {selectedFiles.length > 0 ? (
-        <section className="rounded-xl border border-white/10 bg-white/5 p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">選択中のファイル</h2>
+        <section className="rounded-lg border border-white/20 bg-white/5 p-6">
+          <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3">
+            <h2 className="text-lg font-semibold text-white">Selected Files</h2>
             <button
               type="button"
               onClick={resetAll}
-              className="text-xs text-white/60 underline hover:text-white"
+              className="text-xs text-white/60 transition-colors hover:text-white"
             >
-              リセット
+              Clear All
             </button>
           </div>
-          <ul className="space-y-3 text-sm text-white/80">
+          <ul className="space-y-2 text-sm">
             {selectedFiles.map((file) => (
               <li
                 key={getFileKey(file)}
-                className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/10 px-4 py-3"
+                className="flex items-center justify-between gap-4 rounded-md border border-white/10 bg-white/5 px-4 py-3"
               >
                 <div className="flex flex-col">
                   <span className="font-medium text-white">{file.name}</span>
-                  <span className="text-xs text-white/60">
-                    {bytesToReadable(file.size)} / 更新日: {" "}
-                    {new Date(file.lastModified).toLocaleDateString()}
+                  <span className="text-xs text-white/50">
+                    {bytesToReadable(file.size)} · {new Date(file.lastModified).toLocaleDateString()}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleRemoveFile(file)}
-                  className="text-xs text-white/70 underline hover:text-white"
+                  className="text-xs text-white/60 transition-colors hover:text-white"
                 >
-                  削除
+                  Remove
                 </button>
               </li>
             ))}
@@ -729,12 +755,12 @@ export default function HomePage() {
               type="button"
               onClick={handleUpload}
               disabled={isUploading}
-              className="inline-flex items-center justify-center rounded-md bg-emerald-500 px-5 py-2 text-sm font-semibold text-emerald-900 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-500/40"
+              className="inline-flex items-center justify-center rounded-md bg-white/20 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/30 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isUploading ? "アップロード中..." : "アップロードを開始"}
+              {isUploading ? "Uploading..." : "Upload Files"}
             </button>
             <p className="text-xs text-white/50">
-              PDF はアップロード後にサーバー側で Celery タスクへ引き渡されます。
+              Files will be processed via Celery after upload
             </p>
           </div>
         </section>
@@ -742,80 +768,115 @@ export default function HomePage() {
 
       {results.length > 0 ? (
         <section className="space-y-4">
-          <header className="flex flex-col gap-3">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div>
-                  <h2 className="text-xl font-semibold text-white">処理結果</h2>
-                  <p className="text-sm text-white/60">
-                  バッチ ID: {batchId ?? "N/A"} / タスク ID: {taskId ?? "未キューイング"}
-                </p>
-                <p className="text-xs text-white/50">
-                  書類種別は暫定判定です。セレクトボックスで手動補正するとサーバー側に即時保存されます。
+          {/* タブナビゲーション */}
+          <div className="flex items-center gap-1 border-b border-white/10">
+            <button
+              type="button"
+              onClick={() => setActiveTab("documents")}
+              className={`relative px-5 py-3 text-sm font-medium transition-colors ${
+                activeTab === "documents"
+                  ? "text-white"
+                  : "text-white/50 hover:text-white/70"
+              }`}
+            >
+              Documents
+              {activeTab === "documents" && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-white" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("comparison")}
+              disabled={comparisonHistory.length === 0 && !comparisonResult}
+              className={`relative px-5 py-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+                activeTab === "comparison"
+                  ? "text-white"
+                  : "text-white/50 hover:text-white/70"
+              }`}
+            >
+              Comparison
+              {(comparisonHistory.length > 0 || comparisonResult) && (
+                <span className="ml-1.5 text-xs text-white/50">
+                  ({comparisonHistory.length})
+                </span>
+              )}
+              {activeTab === "comparison" && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-white" />
+              )}
+            </button>
+          </div>
+
+          {/* ドキュメント一覧タブの内容 */}
+          {activeTab === "documents" && (
+            <>
+          <header className="space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div>
+                <h2 className="text-2xl font-semibold text-white">Documents</h2>
+                <p className="mt-1 text-xs text-white/50">
+                  Batch ID: {batchId ?? "N/A"} · Task ID: {taskId ?? "未キューイング"}
                 </p>
               </div>
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={loadDocuments}
-                  className="ml-3 rounded-md border border-white/20 bg-white/5 px-3 py-1 text-xs font-medium text-white/80 hover:bg-white/10"
-                  title="ドキュメント一覧を更新"
+                  className="rounded-md border border-white/20 bg-white/5 px-3 py-2 text-xs text-white/80 transition-colors hover:bg-white/10"
                 >
-                  🔄 更新
+                  Refresh
                 </button>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-white/70">
-                  {selectedDocIds.size} 件選択中
+                <span className="text-sm text-white/50">
+                  {selectedDocIds.size} selected
                 </span>
                 <button
                   type="button"
                   onClick={handleCompare}
                   disabled={selectedDocIds.size < 2 || isComparing}
-                  className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md bg-cyan-500/20 px-4 py-2 text-sm font-medium text-cyan-100 transition-colors hover:bg-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-30"
                 >
-                  {isComparing ? "比較中..." : "比較実行"}
+                  {isComparing ? "Comparing..." : "Compare"}
                 </button>
               </div>
             </div>
             
             {comparisonError && (
-              <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3">
-                <p className="text-sm text-red-200">{comparisonError}</p>
+              <div className="rounded-lg border border-white/20 bg-white/5 px-4 py-3">
+                <p className="text-sm text-white/80">{comparisonError}</p>
               </div>
             )}
             
             {/* 比較進捗表示 */}
             {isComparing && (
-              <div className="rounded-lg border border-blue-500/40 bg-blue-500/10 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-blue-200">比較処理中...</h3>
-                  <span className="text-sm font-bold text-blue-200">{comparisonProgress}%</span>
+              <div className="rounded-lg border border-white/20 bg-white/5 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-white/90">Processing Comparison</h3>
+                  <span className="text-sm font-semibold text-white">{comparisonProgress}%</span>
                 </div>
                 
                 {/* プログレスバー */}
-                <div className="w-full bg-blue-900/30 rounded-full h-2 mb-3">
+                <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
                   <div 
-                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                    className="h-1.5 rounded-full bg-white/60 transition-all duration-300"
                     style={{ width: `${comparisonProgress}%` }}
                   />
                 </div>
                 
                 {/* ステータス情報 */}
-                <div className="space-y-2 text-xs text-blue-100">
+                <div className="space-y-1.5 text-xs text-white/60">
                   <p>
-                    <span className="font-medium">ステータス:</span> {comparisonStatus}
+                    <span className="font-medium text-white/80">Status:</span> {comparisonStatus}
                   </p>
                   
                   {currentSection && (
                     <p>
-                      <span className="font-medium">現在のセクション:</span> {currentSection}
+                      <span className="font-medium text-white/80">Current Section:</span> {currentSection}
                     </p>
                   )}
                   
                   {sectionProgress && (
                     <p>
-                      <span className="font-medium">セクション進捗:</span>{" "}
-                      {sectionProgress.completed} / {sectionProgress.total} セクション完了
+                      <span className="font-medium text-white/80">Progress:</span>{" "}
+                      {sectionProgress.completed} / {sectionProgress.total} sections
                     </p>
                   )}
                 </div>
@@ -846,52 +907,58 @@ export default function HomePage() {
               return (
                 <article
                   key={key}
-                  className={`rounded-xl border p-5 ${
+                  className={`rounded-lg border p-5 transition-all ${
                     isSelected
-                      ? "border-emerald-500 bg-emerald-500/10"
-                      : "border-white/10 bg-white/5"
+                      ? "border-cyan-500/40 bg-cyan-500/10 shadow-lg shadow-cyan-500/10"
+                      : "border-white/20 bg-white/5 hover:border-white/30 hover:bg-white/8"
                   }`}
                 >
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex items-start gap-3">
                       {canSelect && (
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleDocSelection(document.document_id!)}
-                          className="mt-1 h-5 w-5 rounded border-white/20 bg-white/10 text-emerald-500 focus:ring-2 focus:ring-emerald-500"
+                          className="mt-1 h-4 w-4 rounded border-white/30 bg-white/10 text-cyan-500 focus:ring-2 focus:ring-cyan-500/50"
                         />
                       )}
-                      <div>
+                      <div className="flex-1">
                         <h3 className="text-base font-semibold text-white">{document.filename}</h3>
-                        <p className="text-xs text-white/60">
-                          サイズ: {bytesToReadable(document.size_bytes)} / ドキュメント ID: {" "}
-                          {document.document_id ?? "未割当"}
+                        <p className="mt-1 text-xs text-white/50">
+                          {bytesToReadable(document.size_bytes)} · {document.document_id ?? "未割当"}
                         </p>
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={statusClass}
-                      >
-                        {document.status === "accepted" ? "受理" : "拒否"}
+                      <span className="rounded-md bg-white/10 px-2.5 py-1 text-xs font-medium text-white/80">
+                        {document.status === "accepted" ? "Accepted" : "Rejected"}
                       </span>
-                      <span className="inline-flex h-7 items-center rounded-full border border-white/10 px-3 text-xs font-medium text-white/70">
+                      <span className="rounded-md border border-white/20 bg-white/5 px-2.5 py-1 text-xs text-white/70">
                         {processingLabel}
                       </span>
+                      {document.document_id && (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirmId(document.document_id!)}
+                          className="rounded-md border border-white/20 bg-white/5 px-2.5 py-1 text-xs text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </div>
- 
+
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <label className="flex flex-col gap-1 text-xs text-white/70">
-                      書類種別の選択
+                    <label className="flex flex-col gap-1.5 text-xs text-white/60">
+                      Document Type
                       <select
                         value={selectValue}
                         onChange={(event) => handleOverrideChange(document, event.target.value)}
                         disabled={!document.document_id || isUpdating}
-                        className="rounded-md border border-white/10 bg-white/10 px-3 py-2 text-sm text-white focus:border-emerald-400 focus:outline-none disabled:cursor-not-allowed"
+                        className="rounded-md border border-white/20 bg-white/5 px-3 py-2 text-sm text-white focus:border-white/40 focus:outline-none focus:ring-1 focus:ring-white/30 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        <option value={AUTO_OPTION_VALUE}>自動判定を使用</option>
+                        <option value={AUTO_OPTION_VALUE}>Auto-detect</option>
                         {DOCUMENT_TYPE_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
@@ -899,39 +966,39 @@ export default function HomePage() {
                         ))}
                       </select>
                       {isUpdating ? (
-                        <span className="text-[11px] text-white/50">更新しています…</span>
+                        <span className="text-[11px] text-white/50">Updating...</span>
                       ) : null}
                     </label>
-                    <div className="flex flex-col gap-1 text-xs text-white/70">
-                      現在の表示ラベル
-                      <span className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                    <div className="flex flex-col gap-1.5 text-xs text-white/60">
+                      Current Label
+                      <span className="rounded-md border border-white/20 bg-white/5 px-3 py-2 text-sm text-white">
                         {selectedLabel ?? "未判定"}
                       </span>
                     </div>
-                    <div className="flex flex-col gap-1 text-xs text-white/70">
-                      信頼度
-                      <span className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                    <div className="flex flex-col gap-1.5 text-xs text-white/60">
+                      Confidence
+                      <span className="rounded-md border border-white/20 bg-white/5 px-3 py-2 text-sm text-white">
                         {document.detection_confidence != null
                           ? `${Math.round(document.detection_confidence * 100)}%`
                           : "-"}
                       </span>
                     </div>
-                    <div className="flex flex-col gap-1 text-xs text-white/70">
-                      判定根拠
-                      <span className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white">
+                    <div className="flex flex-col gap-1.5 text-xs text-white/60">
+                      Detection Reason
+                      <span className="rounded-md border border-white/20 bg-white/5 px-3 py-2 text-sm text-white/80">
                         {document.detection_reason
                           ? document.detection_reason
-                          : "判定根拠なし"}
+                          : "-"}
                       </span>
                     </div>
                   </div>
 
                   {document.errors.length > 0 ? (
-                    <div className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3">
-                      <h4 className="text-sm font-semibold text-red-200">エラー詳細</h4>
-                      <ul className="mt-2 space-y-1 text-xs text-red-100">
+                    <div className="mt-4 rounded-lg border border-white/20 bg-white/5 px-4 py-3">
+                      <h4 className="text-sm font-medium text-white/90">Errors</h4>
+                      <ul className="mt-2 space-y-1 text-xs text-white/70">
                         {document.errors.map((error) => (
-                          <li key={error}>・{error}</li>
+                          <li key={error}>• {error}</li>
                         ))}
                       </ul>
                     </div>
@@ -939,9 +1006,9 @@ export default function HomePage() {
 
                   {document.processing_status === "pending_classification" && 
                    (!document.selected_type || document.selected_type === "unknown") ? (
-                    <div className="mt-4 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-3">
-                      <h4 className="text-sm font-semibold text-yellow-200">⚠️ 書類種別を選択してください</h4>
-                      <p className="mt-2 text-xs text-yellow-100">
+                    <div className="mt-4 rounded-lg border border-white/20 bg-white/5 px-4 py-3">
+                      <h4 className="text-sm font-medium text-white/90">Document Type Required</h4>
+                      <p className="mt-2 text-xs leading-relaxed text-white/60">
                         書類種別が未判定のため、構造化処理が開始されていません。
                         上記のプルダウンから適切な書類種別を選択すると、自動的に構造化処理が開始されます。
                       </p>
@@ -955,56 +1022,149 @@ export default function HomePage() {
               );
             })}
           </div>
-        </section>
-      ) : null}
-      
-      {comparisonResult && (
-        <section className="mt-8 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white">比較結果</h2>
-            <button
-              type="button"
-              onClick={() => setComparisonResult(null)}
-              className="text-sm text-white/70 hover:text-white"
-            >
-              閉じる
-            </button>
+            </>
+          )}
+
+          {/* 比較結果タブの内容 */}
+          {activeTab === "comparison" && (
+        <div className="flex gap-6">
+          {/* 左側: 比較履歴リスト */}
+          <div className="w-80 shrink-0 space-y-3">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="text-sm font-semibold text-white">Comparison History</h3>
+              <span className="text-xs text-white/50">{comparisonHistory.length} items</span>
+            </div>
+            
+            <div className="max-h-[calc(100vh-20rem)] space-y-2 overflow-y-auto pr-2">
+              {comparisonHistory.length === 0 ? (
+                <p className="py-8 text-center text-sm text-white/50">No comparison history</p>
+              ) : (
+                comparisonHistory.map((item) => (
+                  <button
+                    key={item.comparison_id}
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const result = await getComparisonResult(item.comparison_id);
+                        setComparisonResult(result);
+                        setSelectedHistoryId(item.comparison_id);
+                      } catch (error) {
+                        console.error("比較結果の読み込みに失敗:", error);
+                      }
+                    }}
+                    className={`w-full rounded-lg border p-3 text-left transition-all ${
+                      selectedHistoryId === item.comparison_id
+                        ? "border-cyan-500/40 bg-cyan-500/10"
+                        : "border-white/20 bg-white/5 hover:border-white/30 hover:bg-white/10"
+                    }`}
+                  >
+                    <div className="mb-1.5 flex items-start justify-between gap-2">
+                      <span className="text-xs font-medium text-white/90">
+                        {item.doc1_filename} vs {item.doc2_filename}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-white/50">
+                      <span>{item.section_count} sections</span>
+                      <span>·</span>
+                      <span>{new Date(item.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
           
-          <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-            <div className="space-y-4">
+          {/* 右側: 比較結果詳細 */}
+          {comparisonResult ? (
+        <div className="min-w-0 flex-1 space-y-6">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <h2 className="text-2xl font-semibold text-white">比較結果</h2>
+            <div className="flex gap-3">
+              {/* <button
+                type="button"
+                onClick={() => setActiveTab("documents")}
+                className="rounded-md border border-white/20 bg-white/5 px-4 py-2 text-sm text-white/90 transition-colors hover:bg-white/10"
+              >
+                ← 一覧に戻る
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setComparisonResult(null);
+                  setActiveTab("documents");
+                }}
+                className="rounded-md border border-white/20 bg-white/5 px-4 py-2 text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                × 閉じる
+              </button> */}
+            </div>
+          </div>
+          
+          {/* サマリーダッシュボード */}
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-lg border border-white/20 bg-white/5 p-4">
+              <div className="text-xs font-medium uppercase tracking-wider text-white/50">Total Sections</div>
+              <div className="mt-1 text-2xl font-semibold text-white">
+                {comparisonResult.section_detailed_comparisons?.length || 0}
+              </div>
+            </div>
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+              <div className="text-xs font-medium uppercase tracking-wider text-amber-200/70">High Priority</div>
+              <div className="mt-1 text-2xl font-semibold text-amber-100">
+                {comparisonResult.section_detailed_comparisons?.filter((s: any) => s.importance === "high").length || 0}
+              </div>
+            </div>
+            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
+              <div className="text-xs font-medium uppercase tracking-wider text-yellow-200/70">Medium Priority</div>
+              <div className="mt-1 text-2xl font-semibold text-yellow-100">
+                {comparisonResult.section_detailed_comparisons?.filter((s: any) => s.importance === "medium").length || 0}
+              </div>
+            </div>
+            <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
+              <div className="text-xs font-medium uppercase tracking-wider text-blue-200/70">Numerical Changes</div>
+              <div className="mt-1 text-2xl font-semibold text-blue-100">
+                {comparisonResult.numerical_differences?.length || 0}
+              </div>
+            </div>
+          </div>
+          
+          <div className="space-y-5">
               {/* 基本情報 */}
               <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4">
-                  <h3 className="text-sm font-semibold text-emerald-200">ドキュメント1</h3>
-                  <p className="mt-2 text-xs text-emerald-100">
-                    ファイル名: {comparisonResult.doc1_info?.filename || "不明"}
-                  </p>
-                  <p className="text-xs text-emerald-100">
-                    会社名: {comparisonResult.doc1_info?.company_name || "未抽出"}
-                  </p>
-                  <p className="text-xs text-emerald-100">
-                    年度: {comparisonResult.doc1_info?.fiscal_year || "未抽出"}
-                  </p>
+                <div className="rounded-lg border border-white/20 bg-white/5 p-4">
+                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/70">Document 1</h3>
+                  <div className="space-y-1.5">
+                    <p className="text-sm text-white">
+                      <span className="text-white/60">ファイル名:</span> {comparisonResult.doc1_info?.filename || "不明"}
+                    </p>
+                    <p className="text-sm text-white">
+                      <span className="text-white/60">会社名:</span> {comparisonResult.doc1_info?.company_name || "未抽出"}
+                    </p>
+                    <p className="text-sm text-white">
+                      <span className="text-white/60">年度:</span> {comparisonResult.doc1_info?.fiscal_year || "未抽出"}
+                    </p>
+                  </div>
                 </div>
-                <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4">
-                  <h3 className="text-sm font-semibold text-emerald-200">ドキュメント2</h3>
-                  <p className="mt-2 text-xs text-emerald-100">
-                    ファイル名: {comparisonResult.doc2_info?.filename || "不明"}
-                  </p>
-                  <p className="text-xs text-emerald-100">
-                    会社名: {comparisonResult.doc2_info?.company_name || "未抽出"}
-                  </p>
-                  <p className="text-xs text-emerald-100">
-                    年度: {comparisonResult.doc2_info?.fiscal_year || "未抽出"}
-                  </p>
+                <div className="rounded-lg border border-white/20 bg-white/5 p-4">
+                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/70">Document 2</h3>
+                  <div className="space-y-1.5">
+                    <p className="text-sm text-white">
+                      <span className="text-white/60">ファイル名:</span> {comparisonResult.doc2_info?.filename || "不明"}
+                    </p>
+                    <p className="text-sm text-white">
+                      <span className="text-white/60">会社名:</span> {comparisonResult.doc2_info?.company_name || "未抽出"}
+                    </p>
+                    <p className="text-sm text-white">
+                      <span className="text-white/60">年度:</span> {comparisonResult.doc2_info?.fiscal_year || "未抽出"}
+                    </p>
+                  </div>
                 </div>
               </div>
               
               {/* 比較モード */}
-              <div className="rounded-lg border border-blue-500/40 bg-blue-500/10 p-4">
-                <h3 className="text-sm font-semibold text-blue-200">比較モード</h3>
-                <p className="mt-2 text-xs text-blue-100">
+              <div className="rounded-lg border border-white/20 bg-white/5 p-4">
+                <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-white/70">Comparison Mode</h3>
+                <p className="text-sm text-white">
                   {comparisonResult.mode === "consistency_check" && "整合性チェックモード（同じ会社の異なる書類）"}
                   {comparisonResult.mode === "diff_analysis_company" && "差分分析モード（異なる会社の同じ書類）"}
                   {comparisonResult.mode === "diff_analysis_year" && "差分分析モード（同じ会社の異なる年度）"}
@@ -1014,186 +1174,505 @@ export default function HomePage() {
               
               {/* セクションマッピング */}
               {comparisonResult.section_mappings && comparisonResult.section_mappings.length > 0 && (
-                <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-                  <h3 className="text-sm font-semibold text-white">セクションマッピング ({comparisonResult.section_mappings.length} 件)</h3>
-                  <div className="mt-3 space-y-2">
-                    {comparisonResult.section_mappings.slice(0, 5).map((mapping: any, idx: number) => (
-                      <div key={idx} className="text-xs text-white/70">
-                        <span className="font-medium">{mapping.doc1_section}</span>
-                        {" ↔ "}
-                        <span className="font-medium">{mapping.doc2_section}</span>
-                        {" "}
-                        <span className="text-white/50">
-                          (信頼度: {(mapping.confidence_score * 100).toFixed(0)}%, 方法: {mapping.mapping_method})
-                        </span>
-                      </div>
-                    ))}
-                    {comparisonResult.section_mappings.length > 5 && (
-                      <p className="text-xs text-white/50">... 他 {comparisonResult.section_mappings.length - 5} 件</p>
-                    )}
+                <details className="rounded-lg border border-white/20 bg-white/5">
+                  <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-white hover:bg-white/5">
+                    Section Mappings ({comparisonResult.section_mappings.length})
+                  </summary>
+                  <div className="border-t border-white/10 px-4 py-3">
+                    <div className="space-y-1.5">
+                      {comparisonResult.section_mappings.map((mapping: any, idx: number) => (
+                        <div key={idx} className="flex items-start justify-between border-b border-white/5 py-2 text-xs last:border-0">
+                          <div className="flex-1">
+                            <span className="text-white">{mapping.doc1_section}</span>
+                            <span className="mx-2 text-white/40">↔</span>
+                            <span className="text-white">{mapping.doc2_section}</span>
+                          </div>
+                          <div className="ml-4 flex gap-2 text-[10px] text-white/50">
+                            <span>{(mapping.confidence_score * 100).toFixed(0)}%</span>
+                            <span className="text-white/30">·</span>
+                            <span>{mapping.mapping_method}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                </details>
               )}
               
               {/* 数値差分 */}
               {comparisonResult.numerical_differences && comparisonResult.numerical_differences.length > 0 && (
-                <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-4">
-                  <h3 className="text-sm font-semibold text-yellow-200">数値差分 ({comparisonResult.numerical_differences.length} 件)</h3>
-                  <div className="mt-3 space-y-2">
-                    {comparisonResult.numerical_differences.slice(0, 5).map((diff: any, idx: number) => (
-                      <div key={idx} className="text-xs text-yellow-100">
-                        <span className="font-medium">{diff.section} - {diff.item_name}:</span>
-                        {" "}
-                        {diff.value1} → {diff.value2}
-                        {" "}
-                        <span className="text-yellow-50">
-                          (差: {diff.difference.toFixed(2)}, {diff.difference_pct?.toFixed(2)}%)
-                        </span>
-                      </div>
-                    ))}
-                    {comparisonResult.numerical_differences.length > 5 && (
-                      <p className="text-xs text-yellow-50/50">... 他 {comparisonResult.numerical_differences.length - 5} 件</p>
-                    )}
+                <details className="rounded-lg border border-white/20 bg-white/5">
+                  <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-white hover:bg-white/5">
+                    Numerical Differences ({comparisonResult.numerical_differences.length})
+                  </summary>
+                  <div className="border-t border-white/10 px-4 py-3">
+                    <div className="space-y-1.5">
+                      {comparisonResult.numerical_differences.map((diff: any, idx: number) => (
+                        <div key={idx} className="border-b border-white/5 py-2 text-xs last:border-0">
+                          <div className="font-medium text-white/90">{diff.section} - {diff.item_name}</div>
+                          <div className="mt-1 flex items-center gap-2 text-white/60">
+                            <span>{typeof diff.value1 === 'object' ? JSON.stringify(diff.value1) : (diff.value1 ?? "N/A")}</span>
+                            <span className="text-white/30">→</span>
+                            <span>{typeof diff.value2 === 'object' ? JSON.stringify(diff.value2) : (diff.value2 ?? "N/A")}</span>
+                            {(typeof diff.difference === "number" || (diff.difference_pct != null && typeof diff.difference_pct === "number" && !isNaN(diff.difference_pct))) && (
+                              <span className="ml-2 text-white/40">
+                                (差: {typeof diff.difference === "number" ? diff.difference.toFixed(2) : "N/A"}
+                                {diff.difference_pct != null && typeof diff.difference_pct === "number" && !isNaN(diff.difference_pct) && `, ${diff.difference_pct.toFixed(2)}%`})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                </details>
               )}
               
               {/* テキスト差分 */}
               {comparisonResult.text_differences && comparisonResult.text_differences.length > 0 && (
-                <div className="rounded-lg border border-purple-500/40 bg-purple-500/10 p-4">
-                  <h3 className="text-sm font-semibold text-purple-200">テキスト差分 ({comparisonResult.text_differences.length} 件)</h3>
-                  <div className="mt-3 space-y-2">
-                    {comparisonResult.text_differences.map((diff: any, idx: number) => (
-                      <div key={idx} className="text-xs text-purple-100">
-                        <span className="font-medium">{diff.section}:</span>
-                        {" "}
-                        一致率 {(diff.match_ratio * 100).toFixed(1)}%
-                      </div>
-                    ))}
+                <details className="rounded-lg border border-white/20 bg-white/5">
+                  <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-white hover:bg-white/5">
+                    Text Differences ({comparisonResult.text_differences.length})
+                  </summary>
+                  <div className="border-t border-white/10 px-4 py-3">
+                    <div className="space-y-1.5">
+                      {comparisonResult.text_differences.map((diff: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between border-b border-white/5 py-2 text-xs last:border-0">
+                          <span className="text-white">{diff.section}</span>
+                          <span className="ml-4 text-white/50">一致率 {(diff.match_ratio * 100).toFixed(1)}%</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                </details>
               )}
               
               {/* セクション別詳細差分 */}
               {comparisonResult.section_detailed_comparisons && comparisonResult.section_detailed_comparisons.length > 0 && (
-                <div className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 p-4">
-                  <h3 className="text-sm font-semibold text-cyan-200">
-                    セクション別詳細差分 ({comparisonResult.section_detailed_comparisons.length} 件)
-                  </h3>
-                  <div className="mt-3 space-y-4">
-                    {comparisonResult.section_detailed_comparisons.map((detail: any, idx: number) => (
-                      <div key={idx} className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-3">
+                <div className="rounded-lg border border-white/20 bg-white/5 p-5">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-base font-semibold text-white">
+                      Detailed Comparisons ({(() => {
+                        let filtered = comparisonResult.section_detailed_comparisons;
+                        if (importanceFilter !== "all") {
+                          filtered = filtered.filter((d: any) => d.importance === importanceFilter);
+                        }
+                        if (searchQuery) {
+                          filtered = filtered.filter((d: any) => 
+                            d.section_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            d.summary?.toLowerCase().includes(searchQuery.toLowerCase())
+                          );
+                        }
+                        return filtered.length;
+                      })()}/{comparisonResult.section_detailed_comparisons.length})
+                    </h3>
+                  </div>
+                  
+                  {/* フィルタリングUI */}
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row">
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        placeholder="検索..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full rounded-md border border-white/20 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-white/40 focus:outline-none focus:ring-1 focus:ring-white/30"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setImportanceFilter("all")}
+                        className={`rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                          importanceFilter === "all"
+                            ? "bg-white/20 text-white"
+                            : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/80"
+                        }`}
+                      >
+                        All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setImportanceFilter("high")}
+                        className={`rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                          importanceFilter === "high"
+                            ? "bg-amber-500/20 text-amber-200 border border-amber-500/30"
+                            : "bg-white/5 text-white/60 hover:bg-amber-500/10 hover:text-amber-300/80"
+                        }`}
+                      >
+                        High
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setImportanceFilter("medium")}
+                        className={`rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                          importanceFilter === "medium"
+                            ? "bg-yellow-500/20 text-yellow-200 border border-yellow-500/30"
+                            : "bg-white/5 text-white/60 hover:bg-yellow-500/10 hover:text-yellow-300/80"
+                        }`}
+                      >
+                        Medium
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setImportanceFilter("low")}
+                        className={`rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                          importanceFilter === "low"
+                            ? "bg-white/20 text-white border border-white/30"
+                            : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/80"
+                        }`}
+                      >
+                        Low
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 space-y-3">
+                    {(() => {
+                      let filtered = comparisonResult.section_detailed_comparisons;
+                      if (importanceFilter !== "all") {
+                        filtered = filtered.filter((d: any) => d.importance === importanceFilter);
+                      }
+                      if (searchQuery) {
+                        filtered = filtered.filter((d: any) => 
+                          d.section_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          d.summary?.toLowerCase().includes(searchQuery.toLowerCase())
+                        );
+                      }
+                      // Doc1のページ番号でソート（昇順）
+                      filtered.sort((a: any, b: any) => {
+                        const getStartPage = (pageRange: string) => {
+                          if (!pageRange) return 0;
+                          const match = pageRange.match(/^(\d+)/);
+                          return match ? parseInt(match[1], 10) : 0;
+                        };
+                        return getStartPage(a.doc1_page_range) - getStartPage(b.doc1_page_range);
+                      });
+                      return filtered;
+                    })().map((detail: any, idx: number) => (
+                      <div key={idx} className="rounded-lg border border-white/20 bg-white/5 p-4 transition-all hover:border-white/30 hover:bg-white/10">
                         {/* セクションヘッダー */}
-                        <div className="mb-2 flex items-start justify-between">
-                          <h4 className="font-semibold text-cyan-200">{detail.section_name}</h4>
+                        <div className="mb-3 flex items-start justify-between gap-3">
+                          <h4 className="flex-1 text-base font-semibold text-white">
+                            {detail.section_name}
+                          </h4>
                           <span
-                            className={`rounded px-2 py-1 text-xs font-semibold ${
+                            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
                               detail.importance === "high"
-                                ? "bg-red-500/20 text-red-200"
+                                ? "bg-amber-500/20 text-amber-200 border border-amber-500/30"
                                 : detail.importance === "medium"
-                                  ? "bg-yellow-500/20 text-yellow-200"
-                                  : "bg-gray-500/20 text-gray-200"
+                                  ? "bg-yellow-500/20 text-yellow-200 border border-yellow-500/30"
+                                  : "bg-white/10 text-white/70 border border-white/20"
                             }`}
                           >
-                            {detail.importance === "high" ? "重要度: 高" : detail.importance === "medium" ? "重要度: 中" : "重要度: 低"}
+                            {detail.importance === "high" ? "High" : detail.importance === "medium" ? "Medium" : "Low"}
                           </span>
                         </div>
                         
-                        <p className="mb-2 text-xs text-cyan-100/70">
-                          Doc1: ページ {detail.doc1_page_range} | Doc2: ページ {detail.doc2_page_range}
-                        </p>
+                        <div className="mb-3 flex items-center gap-4 text-xs text-white/50">
+                          <span>Doc1: p.{detail.doc1_page_range}</span>
+                          <span className="text-white/30">•</span>
+                          <span>Doc2: p.{detail.doc2_page_range}</span>
+                        </div>
                         
                         {/* サマリー */}
-                        <div className="mb-3 rounded bg-cyan-500/10 p-2">
-                          <p className="text-xs font-medium text-cyan-100">{detail.summary}</p>
+                        <div className="mb-4 rounded-md border border-white/10 bg-white/5 p-3">
+                          <p className="text-sm leading-relaxed text-white/90">
+                            {detail.summary}
+                          </p>
                           {detail.importance_reason && (
-                            <p className="mt-1 text-xs text-cyan-100/60">理由: {detail.importance_reason}</p>
+                            <p className="mt-2 border-t border-white/10 pt-2 text-xs leading-relaxed text-white/60">
+                              {detail.importance_reason}
+                            </p>
                           )}
                         </div>
                         
-                        {/* テキスト変更 */}
-                        {detail.text_changes && Object.keys(detail.text_changes).length > 0 && (
-                          <div className="mb-2 space-y-1">
-                            {detail.text_changes.added && detail.text_changes.added.length > 0 && (
-                              <details className="text-xs">
-                                <summary className="cursor-pointer font-medium text-green-200">
-                                  追加 ({detail.text_changes.added.length} 件)
-                                </summary>
-                                <ul className="ml-4 mt-1 space-y-1">
-                                  {detail.text_changes.added.map((item: string, i: number) => (
-                                    <li key={i} className="text-green-100/80">+ {item}</li>
-                                  ))}
-                                </ul>
-                              </details>
-                            )}
-                            {detail.text_changes.removed && detail.text_changes.removed.length > 0 && (
-                              <details className="text-xs">
-                                <summary className="cursor-pointer font-medium text-red-200">
-                                  削除 ({detail.text_changes.removed.length} 件)
-                                </summary>
-                                <ul className="ml-4 mt-1 space-y-1">
-                                  {detail.text_changes.removed.map((item: string, i: number) => (
-                                    <li key={i} className="text-red-100/80">- {item}</li>
-                                  ))}
-                                </ul>
-                              </details>
-                            )}
-                            {detail.text_changes.modified && detail.text_changes.modified.length > 0 && (
-                              <details className="text-xs">
-                                <summary className="cursor-pointer font-medium text-yellow-200">
-                                  変更 ({detail.text_changes.modified.length} 件)
-                                </summary>
-                                <div className="ml-4 mt-1 space-y-2">
-                                  {detail.text_changes.modified.map((item: any, i: number) => (
-                                    <div key={i} className="text-yellow-100/80">
-                                      <div className="text-red-100/60">- {item.before}</div>
-                                      <div className="text-green-100/60">+ {item.after}</div>
+                        {/* 変更詳細 */}
+                        {detail.text_changes && Object.keys(detail.text_changes).length > 0 && (() => {
+                          const isCompanyComparison = comparisonResult?.mode === 'diff_analysis_company';
+                          const company1Name = comparisonResult?.doc1_info?.company_name || '会社A';
+                          const company2Name = comparisonResult?.doc2_info?.company_name || '会社B';
+                          
+                          return (
+                            <div className="mb-3 space-y-1.5">
+                              {/* 会社間比較の場合 */}
+                              {isCompanyComparison && (
+                                <>
+                                  {detail.text_changes.only_in_company1 && detail.text_changes.only_in_company1.length > 0 && (
+                                    <details className="rounded-md border border-blue-500/30 bg-blue-500/5">
+                                      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-blue-200 hover:bg-blue-500/10">
+                                        {company1Name} のみ ({detail.text_changes.only_in_company1.length})
+                                      </summary>
+                                      <div className="border-t border-blue-500/20 px-3 py-2">
+                                        <ul className="space-y-1">
+                                          {detail.text_changes.only_in_company1.map((item: string, i: number) => (
+                                            <li key={i} className="text-xs leading-relaxed text-blue-100/90">• {item}</li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    </details>
+                                  )}
+                                  {detail.text_changes.only_in_company2 && detail.text_changes.only_in_company2.length > 0 && (
+                                    <details className="rounded-md border border-purple-500/30 bg-purple-500/5">
+                                      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-purple-200 hover:bg-purple-500/10">
+                                        {company2Name} のみ ({detail.text_changes.only_in_company2.length})
+                                      </summary>
+                                      <div className="border-t border-purple-500/20 px-3 py-2">
+                                        <ul className="space-y-1">
+                                          {detail.text_changes.only_in_company2.map((item: string, i: number) => (
+                                            <li key={i} className="text-xs leading-relaxed text-purple-100/90">• {item}</li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    </details>
+                                  )}
+                                  {detail.text_changes.different_approaches && detail.text_changes.different_approaches.length > 0 && (
+                                    <details className="rounded-md border border-amber-500/30 bg-amber-500/5">
+                                      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-amber-200 hover:bg-amber-500/10">
+                                        開示方針の違い ({detail.text_changes.different_approaches.length})
+                                      </summary>
+                                      <div className="border-t border-amber-500/20 px-3 py-2">
+                                        <div className="space-y-2">
+                                          {detail.text_changes.different_approaches.map((item: any, i: number) => (
+                                            <div key={i} className="text-xs rounded bg-white/5 p-2">
+                                              <div className="font-medium text-amber-100/90 mb-1">{item.aspect}</div>
+                                              <div className="text-blue-200/80"><span className="font-medium">{company1Name}:</span> {item.company1_approach}</div>
+                                              <div className="text-purple-200/80"><span className="font-medium">{company2Name}:</span> {item.company2_approach}</div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </details>
+                                  )}
+                                </>
+                              )}
+                              
+                              {/* 年度間比較・整合性チェックの場合 */}
+                              {!isCompanyComparison && (
+                                <>
+                                  {detail.text_changes.added && detail.text_changes.added.length > 0 && (
+                                    <details className="rounded-md border border-emerald-500/30 bg-emerald-500/5">
+                                      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-emerald-200 hover:bg-emerald-500/10">
+                                        Added ({detail.text_changes.added.length})
+                                      </summary>
+                                      <div className="border-t border-emerald-500/20 px-3 py-2">
+                                        <ul className="space-y-1">
+                                          {detail.text_changes.added.map((item: string, i: number) => (
+                                            <li key={i} className="text-xs leading-relaxed text-emerald-100/90">+ {item}</li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    </details>
+                                  )}
+                                  {detail.text_changes.removed && detail.text_changes.removed.length > 0 && (
+                                    <details className="rounded-md border border-rose-500/30 bg-rose-500/5">
+                                      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-rose-200 hover:bg-rose-500/10">
+                                        Removed ({detail.text_changes.removed.length})
+                                      </summary>
+                                      <div className="border-t border-rose-500/20 px-3 py-2">
+                                        <ul className="space-y-1">
+                                          {detail.text_changes.removed.map((item: string, i: number) => (
+                                            <li key={i} className="text-xs leading-relaxed text-rose-100/90">- {item}</li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    </details>
+                                  )}
+                                  {detail.text_changes.modified && detail.text_changes.modified.length > 0 && (
+                                    <details className="rounded-md border border-blue-500/30 bg-blue-500/5">
+                                      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-blue-200 hover:bg-blue-500/10">
+                                        Modified ({detail.text_changes.modified.length})
+                                      </summary>
+                                      <div className="border-t border-blue-500/20 px-3 py-2">
+                                        <div className="space-y-2">
+                                          {detail.text_changes.modified.map((item: any, i: number) => (
+                                            <div key={i} className="text-xs">
+                                              <div className="text-rose-200/80">- {item.before}</div>
+                                              <div className="text-emerald-200/80">+ {item.after}</div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </details>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        
+                        {/* 数値変更 */}
+                        {detail.numerical_changes && detail.numerical_changes.length > 0 && (() => {
+                          const isCompanyComparison = comparisonResult?.mode === 'diff_analysis_company';
+                          const company1Name = comparisonResult?.doc1_info?.company_name || '会社A';
+                          const company2Name = comparisonResult?.doc2_info?.company_name || '会社B';
+                          
+                          return (
+                            <details className="mb-3 rounded-md border border-white/10 bg-white/5">
+                              <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-white/80 hover:bg-white/10">
+                                {isCompanyComparison ? '数値指標の比較' : 'Numerical Changes'} ({detail.numerical_changes.length})
+                              </summary>
+                              <div className="border-t border-white/10 px-3 py-2">
+                                <div className="space-y-1.5">
+                                  {detail.numerical_changes.map((change: any, i: number) => (
+                                    <div key={i} className="text-xs">
+                                      <div className="font-medium text-white/80">
+                                        {isCompanyComparison ? (change.metric || change.item) : change.item}
+                                      </div>
+                                      <div className="mt-0.5 flex items-center gap-2 text-white/60">
+                                        {isCompanyComparison ? (
+                                          <>
+                                            <span className="text-blue-200/80">{company1Name}: {
+                                              typeof change.company1_value === 'object' 
+                                                ? JSON.stringify(change.company1_value) 
+                                                : (change.company1_value ?? change.value1 ?? "N/A")
+                                            }</span>
+                                            <span className="text-white/30">•</span>
+                                            <span className="text-purple-200/80">{company2Name}: {
+                                              typeof change.company2_value === 'object' 
+                                                ? JSON.stringify(change.company2_value) 
+                                                : (change.company2_value ?? change.value2 ?? "N/A")
+                                            }</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <span>{
+                                              typeof change.value1 === 'object' 
+                                                ? JSON.stringify(change.value1) 
+                                                : (change.value1 ?? "N/A")
+                                            }</span>
+                                            <span className="text-white/30">→</span>
+                                            <span>{
+                                              typeof change.value2 === 'object' 
+                                                ? JSON.stringify(change.value2) 
+                                                : (change.value2 ?? "N/A")
+                                            }</span>
+                                          </>
+                                        )}
+                                        {(change.change_pct != null || change.difference_pct != null) && (
+                                          typeof (change.change_pct ?? change.difference_pct) === "number" && 
+                                          !isNaN(change.change_pct ?? change.difference_pct) && (
+                                            <span className="text-white/40">
+                                              ({(change.change_pct ?? change.difference_pct) > 0 ? "+" : ""}
+                                              {(change.change_pct ?? change.difference_pct).toFixed(1)}%)
+                                            </span>
+                                          )
+                                        )}
+                                      </div>
+                                      {isCompanyComparison && change.context && (
+                                        <div className="mt-1 text-white/50 italic">{change.context}</div>
+                                      )}
                                     </div>
                                   ))}
                                 </div>
-                              </details>
-                            )}
-                          </div>
-                        )}
-                        
-                        {/* 数値変更 */}
-                        {detail.numerical_changes && detail.numerical_changes.length > 0 && (
-                          <details className="text-xs">
-                            <summary className="cursor-pointer font-medium text-cyan-200">
-                              数値変更 ({detail.numerical_changes.length} 件)
-                            </summary>
-                            <div className="ml-4 mt-1 space-y-1">
-                              {detail.numerical_changes.map((change: any, i: number) => (
-                                <div key={i} className="text-cyan-100/80">
-                                  {change.item}: {change.value1} → {change.value2}
-                                  {change.change_pct && ` (${change.change_pct > 0 ? "+" : ""}${change.change_pct.toFixed(1)}%)`}
-                                </div>
-                              ))}
-                            </div>
-                          </details>
-                        )}
+                              </div>
+                            </details>
+                          );
+                        })()}
                         
                         {/* トーン分析 */}
-                        {detail.tone_analysis && Object.keys(detail.tone_analysis).length > 0 && (
-                          <div className="mt-2 text-xs text-cyan-100/70">
-                            <span className="font-medium">トーン:</span>
-                            {" "}
-                            Doc1: {detail.tone_analysis.tone1}
-                            {" vs "}
-                            Doc2: {detail.tone_analysis.tone2}
-                            {detail.tone_analysis.difference && (
-                              <span className="ml-2 text-cyan-100/50">({detail.tone_analysis.difference})</span>
-                            )}
-                          </div>
-                        )}
+                        {detail.tone_analysis && Object.keys(detail.tone_analysis).length > 0 && (() => {
+                          const isCompanyComparison = comparisonResult?.mode === 'diff_analysis_company';
+                          const company1Name = comparisonResult?.doc1_info?.company_name || '会社A';
+                          const company2Name = comparisonResult?.doc2_info?.company_name || '会社B';
+                          
+                          return (
+                            <div className="mt-3 rounded-md border border-white/10 bg-white/5 p-3 text-xs">
+                              <div className="text-white/70">
+                                <span className="font-medium text-white/90">
+                                  {isCompanyComparison ? '開示トーン:' : 'Tone:'}
+                                </span>
+                                {" "}
+                                {isCompanyComparison ? (
+                                  <>
+                                    <span className="text-blue-200/80">
+                                      {company1Name}: {detail.tone_analysis.company1_tone || detail.tone_analysis.tone1}
+                                    </span>
+                                    {" • "}
+                                    <span className="text-purple-200/80">
+                                      {company2Name}: {detail.tone_analysis.company2_tone || detail.tone_analysis.tone2}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>Doc1: {detail.tone_analysis.tone1}</span>
+                                    {" • "}
+                                    <span>Doc2: {detail.tone_analysis.tone2}</span>
+                                  </>
+                                )}
+                              </div>
+                              {isCompanyComparison && detail.tone_analysis.style_difference && (
+                                <p className="mt-1.5 leading-relaxed text-white/60">{detail.tone_analysis.style_difference}</p>
+                              )}
+                              {!isCompanyComparison && detail.tone_analysis.difference && (
+                                <p className="mt-1.5 leading-relaxed text-white/60">{detail.tone_analysis.difference}</p>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>
                 </div>
               )}
+          </div>
+        </div>
+          ) : (
+            <div className="flex min-w-0 flex-1 items-center justify-center rounded-lg border border-white/20 bg-white/5 p-12">
+              <p className="text-sm text-white/50">Select a comparison from the history</p>
+            </div>
+          )}
+        </div>
+          )}
+        </section>
+      ) : null}
+
+      {/* 削除確認ダイアログ */}
+      {deleteConfirmId && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={(e) => {
+            // 背景クリックでダイアログを閉じる（削除中は閉じない）
+            if (e.target === e.currentTarget && !isDeleting) {
+              setDeleteConfirmId(null);
+            }
+          }}
+        >
+          <div 
+            className="mx-4 w-full max-w-md rounded-lg border border-white/20 bg-gray-900/95 p-6 shadow-2xl backdrop-blur-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-white">Delete Document</h3>
+            <p className="mt-3 text-sm leading-relaxed text-white/70">
+              このドキュメントとすべての関連データ（PDFファイル、メタデータ、比較結果）が完全に削除されます。
+              この操作は取り消せません。
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  console.log("キャンセルボタンクリック");
+                  setDeleteConfirmId(null);
+                }}
+                disabled={isDeleting}
+                className="flex-1 rounded-md border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  console.log("削除ボタンクリック, ID:", deleteConfirmId);
+                  handleDelete(deleteConfirmId);
+                }}
+                disabled={isDeleting}
+                className="flex-1 rounded-md bg-white/20 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/30 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
             </div>
           </div>
-        </section>
+        </div>
       )}
     </main>
   );

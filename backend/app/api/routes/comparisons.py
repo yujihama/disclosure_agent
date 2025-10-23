@@ -73,6 +73,45 @@ def create_comparison(
     )
 
 
+@router.get("", response_model=list[dict])
+def list_comparisons(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> list[dict]:
+    """
+    過去の比較結果一覧を取得
+    
+    - ファイル名（comparison_id）と作成日時を返す
+    """
+    comparison_dir = Path(settings.upload_storage_dir).parent / "comparisons"
+    
+    if not comparison_dir.exists():
+        return []
+    
+    results = []
+    for result_path in comparison_dir.glob("*.json"):
+        try:
+            with open(result_path, 'r', encoding='utf-8') as f:
+                result_dict = json.load(f)
+            
+            # ファイル名を常に使用
+            results.append({
+                "comparison_id": result_path.stem,
+                "created_at": result_dict.get('created_at', ''),
+                "mode": result_dict.get('mode', ''),
+                "doc1_filename": result_dict.get('doc1_info', {}).get('filename', ''),
+                "doc2_filename": result_dict.get('doc2_info', {}).get('filename', ''),
+                "section_count": len(result_dict.get('section_detailed_comparisons', []))
+            })
+        except Exception as e:
+            logger.warning(f"比較結果ファイル {result_path} の読み込みに失敗: {e}")
+            continue
+    
+    # 作成日時の降順でソート
+    results.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+    
+    return results
+
+
 @router.get("/{comparison_id}/status", response_model=ComparisonStatusResponse)
 def get_comparison_status(
     comparison_id: str,
@@ -86,63 +125,91 @@ def get_comparison_status(
     - completed: 完了
     - failed: 失敗
     """
-    result = celery_app.AsyncResult(comparison_id)
-    
-    if result.ready():
-        # タスク完了
-        if result.successful():
-            task_result = result.get()
-            if task_result.get("status") == "completed":
-                return ComparisonStatusResponse(
-                    comparison_id=comparison_id,
-                    status="completed",
-                    progress=100,
-                    step="completed"
-                )
+    try:
+        result = celery_app.AsyncResult(comparison_id)
+        
+        if result.ready():
+            # タスク完了
+            if result.successful():
+                task_result = result.get()
+                if task_result.get("status") == "completed":
+                    return ComparisonStatusResponse(
+                        comparison_id=comparison_id,
+                        status="completed",
+                        progress=100,
+                        step="completed"
+                    )
+                else:
+                    return ComparisonStatusResponse(
+                        comparison_id=comparison_id,
+                        status="failed",
+                        progress=0,
+                        error=task_result.get("error", "不明なエラー")
+                    )
             else:
+                # タスクが例外で失敗
                 return ComparisonStatusResponse(
                     comparison_id=comparison_id,
                     status="failed",
                     progress=0,
-                    error=task_result.get("error", "不明なエラー")
+                    error=str(result.result)
                 )
         else:
-            # タスクが例外で失敗
-            return ComparisonStatusResponse(
-                comparison_id=comparison_id,
-                status="failed",
-                progress=0,
-                error=str(result.result)
-            )
-    else:
-        # タスク実行中
-        state = result.state
-        info = result.info or {}
+            # タスク実行中
+            state = result.state
+            info = result.info or {}
+            
+            if state == 'PENDING':
+                return ComparisonStatusResponse(
+                    comparison_id=comparison_id,
+                    status="pending",
+                    progress=0,
+                    step="waiting"
+                )
+            elif state == 'PROGRESS':
+                return ComparisonStatusResponse(
+                    comparison_id=comparison_id,
+                    status="processing",
+                    progress=info.get('progress', 0),
+                    step=info.get('step', 'processing'),
+                    current_section=info.get('current_section'),
+                    total_sections=info.get('total_sections'),
+                    completed_sections=info.get('completed_sections')
+                )
+            else:
+                return ComparisonStatusResponse(
+                    comparison_id=comparison_id,
+                    status="processing",
+                    progress=0,
+                    step=state.lower()
+                )
+    except AttributeError as exc:
+        # Celeryバックエンドが無効な場合のフォールバック
+        logger.error(f"Celeryバックエンドエラー: {exc}")
+        # 結果ファイルから直接確認
+        comparison_dir = Path(settings.upload_storage_dir).parent / "comparisons"
+        result_path = comparison_dir / f"{comparison_id}.json"
         
-        if state == 'PENDING':
+        if result_path.exists():
             return ComparisonStatusResponse(
                 comparison_id=comparison_id,
-                status="pending",
-                progress=0,
-                step="waiting"
-            )
-        elif state == 'PROGRESS':
-            return ComparisonStatusResponse(
-                comparison_id=comparison_id,
-                status="processing",
-                progress=info.get('progress', 0),
-                step=info.get('step', 'processing'),
-                current_section=info.get('current_section'),
-                total_sections=info.get('total_sections'),
-                completed_sections=info.get('completed_sections')
+                status="completed",
+                progress=100,
+                step="completed"
             )
         else:
             return ComparisonStatusResponse(
                 comparison_id=comparison_id,
                 status="processing",
-                progress=0,
-                step=state.lower()
+                progress=50,
+                step="analyzing_sections"
             )
+    except Exception as exc:
+        logger.exception(f"ステータス確認中にエラー: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"ステータス確認に失敗しました: {str(exc)}"
+        )
 
 
 @router.get("/{comparison_id}", response_model=ComparisonResponse)

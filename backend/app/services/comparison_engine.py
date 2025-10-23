@@ -334,7 +334,7 @@ confidenceは抽出の信頼度を0.0～1.0で示してください。
         
         # セクション別詳細差分分析を実行
         result.section_detailed_comparisons = self._compare_sections_detailed(
-            doc1_info, doc2_info, structured1, structured2, result.section_mappings, progress_callback
+            doc1_info, doc2_info, structured1, structured2, result.section_mappings, progress_callback, mode
         )
         
         return result
@@ -924,6 +924,7 @@ confidenceは0.0～1.0で、マッピングの信頼度を示してください�
         structured2: dict[str, Any],
         section_mappings: list[SectionMapping],
         progress_callback: Optional[callable] = None,
+        comparison_mode: Optional[ComparisonMode] = None,
     ) -> list[SectionDetailedComparison]:
         """
         マッピングされた各セクションに対して詳細な差分分析を実行
@@ -989,6 +990,7 @@ confidenceは0.0～1.0で、マッピングの信頼度を示してください�
                     all_tables2,
                     doc1_info,
                     doc2_info,
+                    comparison_mode,
                 ): mapping
                 for mapping in section_mappings
             }
@@ -1039,6 +1041,7 @@ confidenceは0.0～1.0で、マッピングの信頼度を示してください�
         all_tables2: list,
         doc1_info: DocumentInfo,
         doc2_info: DocumentInfo,
+        comparison_mode: Optional[ComparisonMode] = None,
     ) -> Optional[SectionDetailedComparison]:
         """
         単一セクションの分析（並列実行用）
@@ -1071,6 +1074,9 @@ confidenceは0.0～1.0で、マッピングの信頼度を示してください�
                 doc1_page_range=f"{section1_info.get('start_page', '?')}-{section1_info.get('end_page', '?')}",
                 doc2_page_range=f"{section2_info.get('start_page', '?')}-{section2_info.get('end_page', '?')}",
                 document_type=doc1_info.document_type or "",
+                doc1_info=doc1_info,
+                doc2_info=doc2_info,
+                comparison_mode=comparison_mode,
             )
             
             return detailed
@@ -1163,50 +1169,123 @@ confidenceは0.0～1.0で、マッピングの信頼度を示してください�
         
         return "\n\n".join(summaries)
     
-    def _analyze_section_with_llm(
+    def _build_company_comparison_prompt(
         self,
+        doc_type_label: str,
         section_name: str,
         text1: str,
         text2: str,
-        tables1: list[dict],
-        tables2: list[dict],
+        tables1_summary: str,
+        tables2_summary: str,
         doc1_page_range: str,
         doc2_page_range: str,
-        document_type: str,
-    ) -> SectionDetailedComparison:
+        doc1_info: DocumentInfo,
+        doc2_info: DocumentInfo,
+    ) -> str:
         """
-        LLMでセクションの詳細差分分析を実行
+        会社間比較用のプロンプトを生成
+        """
+        company1_name = doc1_info.company_name or "会社A"
+        company2_name = doc2_info.company_name or "会社B"
         
-        Args:
-            section_name: セクション名
-            text1: ドキュメント1のセクションテキスト
-            text2: ドキュメント2のセクションテキスト
-            tables1: ドキュメント1のセクションテーブル
-            tables2: ドキュメント2のセクションテーブル
-            doc1_page_range: ドキュメント1のページ範囲
-            doc2_page_range: ドキュメント2のページ範囲
-            document_type: 書類種別
-            
-        Returns:
-            セクション別詳細差分
+        return f"""
+以下は異なる2社の「{doc_type_label}」における「{section_name}」セクションです。
+企業間の開示内容の違いを分析してください。
+
+【{company1_name}】
+ページ範囲: {doc1_page_range}
+テキスト（抜粋）:
+{text1[:3000]}
+
+テーブルデータ:
+{tables1_summary}
+
+【{company2_name}】
+ページ範囲: {doc2_page_range}
+テキスト（抜粋）:
+{text2[:3000]}
+
+テーブルデータ:
+{tables2_summary}
+
+【分析タスク】
+2社の「{section_name}」セクションの違いを以下の観点で分析してください：
+
+1. **開示内容の違い**
+   - {company1_name}のみに記載されている重要な内容（最大5個）
+   - {company2_name}のみに記載されている重要な内容（最大5個）
+   - 両社で異なる記載や方針の違い（最大5個）
+
+2. **数値データの比較**
+   - 両社の主要な数値指標の違い
+   - 規模や比率の差異
+
+3. **開示姿勢とトーンの違い**
+   - 各社の開示の詳細度（詳細/標準/簡潔）
+   - トーン（positive/neutral/negative）
+   - ネガティブ度スコア（1-5）
+   - 開示スタイルの違いの説明
+
+4. **重要度判定**
+   - この違いの重要度（high/medium/low）
+   - 投資家や利害関係者にとっての意義
+
+5. **サマリー**
+   - 2社の違いを1-2文で要約
+
+【出力形式】
+JSON形式で以下のように回答してください：
+{{
+  "text_changes": {{
+    "only_in_company1": ["内容1", "内容2"],
+    "only_in_company2": ["内容1", "内容2"],
+    "different_approaches": [
+      {{
+        "aspect": "側面",
+        "company1_approach": "{company1_name}の方針",
+        "company2_approach": "{company2_name}の方針"
+      }}
+    ]
+  }},
+  "numerical_changes": [
+    {{
+      "metric": "指標名",
+      "company1_value": 数値1,
+      "company2_value": 数値2,
+      "difference_pct": 差異率,
+      "context": "この違いの意味"
+    }}
+  ],
+  "tone_analysis": {{
+    "company1_detail_level": "詳細/標準/簡潔",
+    "company2_detail_level": "詳細/標準/簡潔",
+    "company1_tone": "positive/neutral/negative",
+    "company2_tone": "positive/neutral/negative",
+    "company1_negativity_score": 1.0～5.0,
+    "company2_negativity_score": 1.0～5.0,
+    "style_difference": "開示スタイルの違いの説明"
+  }},
+  "importance": "high/medium/low",
+  "importance_reason": "重要度の理由",
+  "summary": "2社の違いの要約"
+}}
+"""
+    
+    def _build_temporal_comparison_prompt(
+        self,
+        doc_type_label: str,
+        section_name: str,
+        text1: str,
+        text2: str,
+        tables1_summary: str,
+        tables2_summary: str,
+        doc1_page_range: str,
+        doc2_page_range: str,
+    ) -> str:
         """
-        try:
-            import json
-            from .templates import load_template
-            
-            # テンプレートから書類種別の表示名を取得
-            try:
-                template = load_template(document_type)
-                doc_type_label = template.get("display_name", document_type)
-            except:
-                doc_type_label = document_type
-            
-            # テーブルサマリーを作成
-            tables1_summary = self._summarize_tables(tables1)
-            tables2_summary = self._summarize_tables(tables2)
-            
-            # プロンプトを構築
-            prompt = f"""
+        年度間比較・整合性チェック用のプロンプトを生成
+        """
+        return f"""
 以下の2つの「{doc_type_label}」の「{section_name}」セクションを詳細に比較してください。
 
 【ドキュメント1】
@@ -1280,16 +1359,89 @@ JSON形式で以下のように回答してください：
   "summary": "このセクションの差異の要約"
 }}
 """
+    
+    def _analyze_section_with_llm(
+        self,
+        section_name: str,
+        text1: str,
+        text2: str,
+        tables1: list[dict],
+        tables2: list[dict],
+        doc1_page_range: str,
+        doc2_page_range: str,
+        document_type: str,
+        doc1_info: DocumentInfo,
+        doc2_info: DocumentInfo,
+        comparison_mode: Optional[ComparisonMode] = None,
+    ) -> SectionDetailedComparison:
+        """
+        LLMでセクションの詳細差分分析を実行
+        
+        Args:
+            section_name: セクション名
+            text1: ドキュメント1のセクションテキスト
+            text2: ドキュメント2のセクションテキスト
+            tables1: ドキュメント1のセクションテーブル
+            tables2: ドキュメント2のセクションテーブル
+            doc1_page_range: ドキュメント1のページ範囲
+            doc2_page_range: ドキュメント2のページ範囲
+            document_type: 書類種別
+            doc1_info: ドキュメント1の情報
+            doc2_info: ドキュメント2の情報
+            comparison_mode: 比較モード（会社間 or 年度間）
             
-            logger.info(f"セクション詳細分析開始: {section_name}")
+        Returns:
+            セクション別詳細差分
+        """
+        try:
+            import json
+            from .templates import load_template
+            
+            # テンプレートから書類種別の表示名を取得
+            try:
+                template = load_template(document_type)
+                doc_type_label = template.get("display_name", document_type)
+            except:
+                doc_type_label = document_type
+            
+            # テーブルサマリーを作成
+            tables1_summary = self._summarize_tables(tables1)
+            tables2_summary = self._summarize_tables(tables2)
+            
+            # 比較モードに応じてプロンプトを切り替え
+            logger.info(f"プロンプト生成開始: comparison_mode={comparison_mode}, section_name={section_name}")
+            logger.info(f"ComparisonMode.DIFF_ANALYSIS_COMPANY={ComparisonMode.DIFF_ANALYSIS_COMPANY}")
+            logger.info(f"comparison_mode == ComparisonMode.DIFF_ANALYSIS_COMPANY: {comparison_mode == ComparisonMode.DIFF_ANALYSIS_COMPANY}")
+            if comparison_mode == ComparisonMode.DIFF_ANALYSIS_COMPANY:
+                # 会社間比較のプロンプト
+                logger.info("会社間比較プロンプトを生成します")
+                prompt = self._build_company_comparison_prompt(
+                    doc_type_label, section_name,
+                    text1, text2, tables1_summary, tables2_summary,
+                    doc1_page_range, doc2_page_range,
+                    doc1_info, doc2_info
+                )
+            else:
+                # 年度間比較・整合性チェックのプロンプト（既存）
+                logger.info("年度間比較プロンプトを生成します")
+                prompt = self._build_temporal_comparison_prompt(
+                    doc_type_label, section_name,
+                    text1, text2, tables1_summary, tables2_summary,
+                    doc1_page_range, doc2_page_range
+                )
+            
+            logger.info(f"セクション詳細分析開始: {section_name} (モード: {comparison_mode})")
+            
+            # 比較モードに応じてシステムメッセージを調整
+            if comparison_mode == ComparisonMode.DIFF_ANALYSIS_COMPANY:
+                system_message = f"あなたは「{doc_type_label}」の分析エキスパートです。異なる企業間の開示内容の違いを正確に検出し、投資家や利害関係者にとっての重要度を判定してください。"
+            else:
+                system_message = f"あなたは「{doc_type_label}」の分析エキスパートです。差異を正確に検出し、重要度を判定してください。"
             
             response = self.openai_client.chat.completions.create(
                 model=self.settings.openai_model,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": f"あなたは「{doc_type_label}」の分析エキスパートです。差異を正確に検出し、重要度を判定してください。"
-                    },
+                    {"role": "system", "content": system_message},
                     {"role": "user", "content": prompt}
                 ],
                 

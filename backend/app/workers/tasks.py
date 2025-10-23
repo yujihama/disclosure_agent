@@ -368,10 +368,13 @@ def compare_documents_task(self, comparison_id: str, document_ids: list[str]) ->
         )
         
         # 結果をJSONとして保存
-        comparison_dir = Path(settings.upload_storage_dir).parent / "comparisons"
+        from ..core.config import resolve_upload_storage_path
+        upload_dir = resolve_upload_storage_path(settings)
+        comparison_dir = upload_dir.parent / "comparisons"
         comparison_dir.mkdir(parents=True, exist_ok=True)
         
         result_path = comparison_dir / f"{comparison_id}.json"
+        logger.info(f"比較結果を保存: {result_path}")
         
         # ComparisonResultをdictに変換
         from dataclasses import asdict

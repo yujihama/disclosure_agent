@@ -326,6 +326,32 @@ npm test
 
 ## トラブルシューティング
 
+### 起動時に古いタスクが自動実行される場合
+
+**症状**: `restart_services.ps1`でサービスを起動した瞬間に、ボタンを押していないのに以前のタスクが自動実行される。
+
+**原因**: Redisキューに以前の未処理タスクが残っているため。これはCeleryの正常な動作（タスクの永続性）ですが、開発中は混乱を招く可能性があります。
+
+**解決策**:
+
+1. **起動時に選択的にクリア（推奨）**:
+   ```powershell
+   .\backend\restart_services.ps1
+   # プロンプトで "Y" を選択
+   ```
+
+2. **常に自動クリア（開発専用）**:
+   ```powershell
+   .\backend\restart_services_clean.ps1
+   ```
+
+3. **手動でキューをクリア**:
+   ```powershell
+   .\backend\clear_queue.ps1
+   ```
+
+詳細は [Celeryキュー管理ガイド](backend/README_QUEUE_MANAGEMENT.md) を参照してください。
+
 ### CORSエラーが発生する場合
 
 `backend/app/main.py`のCORS設定を確認してください。

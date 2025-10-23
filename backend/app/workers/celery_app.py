@@ -32,6 +32,10 @@ def create_celery_app() -> Celery:
             'socket_connect_timeout': 2,  # バックエンド接続タイムアウト
             'socket_timeout': 2,
         },
+        # タスク有効期限設定（開発環境での古いタスクの自動削除）
+        task_reject_on_worker_lost=True,  # ワーカーロスト時にタスクを拒否
+        task_acks_late=True,  # タスク完了後にACKを送信（再試行可能に）
+        result_expires=3600,  # 結果の有効期限: 1時間（秒）
     )
     return app
 

@@ -242,3 +242,36 @@ async def update_document_type(
 
     result = _metadata_to_result(metadata, classifier)
     return DocumentMutationResponse(document=result)
+
+
+@router.delete(
+    "/{document_id}",
+    summary="Delete a document",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["documents"],
+)
+async def delete_document(document_id: str) -> None:
+    """Delete a document and all its associated files (PDF, metadata, comparisons)."""
+    
+    logger.info(f"DELETE request received for document: {document_id}")
+    
+    settings = get_settings()
+    metadata_store = DocumentMetadataStore(settings)
+    
+    try:
+        # ドキュメントを削除（PDF + メタデータ）
+        logger.info(f"Attempting to delete document: {document_id}")
+        metadata_store.delete(document_id)
+        logger.info(f"Successfully deleted document: {document_id}")
+    except FileNotFoundError as exc:
+        logger.warning(f"Document not found for deletion: {document_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document {document_id} not found"
+        ) from exc
+    except Exception as exc:
+        logger.error(f"Failed to delete document {document_id}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete document: {str(exc)}"
+        ) from exc
