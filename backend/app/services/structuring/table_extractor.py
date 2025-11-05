@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import pdfplumber
 
@@ -17,7 +17,7 @@ class TableExtractionResult:
     def __init__(
         self,
         success: bool,
-        tables: Optional[list[dict[str, any]]] = None,
+        tables: Optional[list[dict[str, Any]]] = None,
         page_count: int = 0,
         table_count: int = 0,
         error: Optional[str] = None,
@@ -105,7 +105,7 @@ class TableExtractor:
             )
 
         except Exception as exc:
-            logger.exception(f"Failed to extract tables from {pdf_path}", exc_info=exc)
+            logger.exception("Failed to extract tables from %s", pdf_path)
             return TableExtractionResult(
                 success=False,
                 error=f"Table extraction failed: {str(exc)}",
@@ -161,8 +161,7 @@ class TableExtractor:
 
         except Exception as exc:
             logger.exception(
-                f"Failed to extract tables from page {page_number} of {pdf_path}",
-                exc_info=exc,
+                "Failed to extract tables from page %s of %s", page_number, pdf_path
             )
             return TableExtractionResult(
                 success=False,
