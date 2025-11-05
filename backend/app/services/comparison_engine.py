@@ -14,7 +14,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, cast
 
 logger = logging.getLogger(__name__)
 
@@ -1495,7 +1495,27 @@ JSON形式で以下のフォーマットで回答してください：
                     additional_searches=additional_searches,
                     initial_search_reason=llm_reason,
                 )
-            
+
+            if additional_searches:
+                reassessed_importance, reassessed_reason = self._reassess_importance(
+                    initial_importance=initial_result.importance,
+                    initial_reason=initial_result.importance_reason,
+                    additional_searches=additional_searches,
+                )
+
+                if (
+                    reassessed_importance != initial_result.importance
+                    or reassessed_reason != initial_result.importance_reason
+                ):
+                    logger.info(
+                        "セクション %s: 追加探索後に重要度を再判定 %s -> %s",
+                        mapping.doc1_section,
+                        initial_result.importance,
+                        reassessed_importance,
+                    )
+                    initial_result.importance = reassessed_importance
+                    initial_result.importance_reason = reassessed_reason
+
             logger.info(f"セクション {mapping.doc1_section}: 分析完了（追加探索{len(additional_searches)}回実行）")
             return initial_result
             
@@ -3227,17 +3247,106 @@ JSON形式で以下のように回答してください：
         """
         if not additional_searches:
             return base_summary
-        
+
         additional_info = []
         for search in additional_searches:
             analysis = search.get("analysis", {})
             new_findings = analysis.get("new_findings", [])
             if new_findings:
                 additional_info.extend(new_findings[:2])
-        
+
         if additional_info:
             enhanced = f"{base_summary}\n\n追加探索により、以下の情報が明らかになりました：{'; '.join(additional_info[:3])}"
         else:
             enhanced = f"{base_summary}\n\n追加探索を実施しましたが、新たな重要な発見はありませんでした。"
-        
+
         return enhanced
+
+    def _reassess_importance(
+        self,
+        initial_importance: Literal["high", "medium", "low"],
+        initial_reason: str,
+        additional_searches: list[dict[str, Any]],
+    ) -> tuple[Literal["high", "medium", "low"], str]:
+        """
+        追加探索の結果を踏まえて重要度を再評価
+        """
+        if not additional_searches:
+            return initial_importance, initial_reason
+
+        importance_order = {"low": 0, "medium": 1, "high": 2}
+        importance_labels = {"low": "低", "medium": "中", "high": "高"}
+
+        final_importance = initial_importance
+        reason_parts: list[str] = []
+
+        if initial_reason:
+            reason_parts.append(initial_reason)
+
+        for search in additional_searches:
+            analysis = search.get("analysis") or {}
+            if not isinstance(analysis, dict):
+                continue
+
+            additional_contradictions = analysis.get("additional_contradictions") or []
+            resolved_contradictions = analysis.get("resolved_contradictions") or []
+            new_findings = analysis.get("new_findings") or []
+            enhanced_understanding = analysis.get("enhanced_understanding")
+
+            if additional_contradictions:
+                if final_importance != "high":
+                    final_importance = "high"
+                reason_parts.append(
+                    f"追加探索で{len(additional_contradictions)}件の矛盾が新たに確認されました。"
+                )
+
+            suggested_importance = analysis.get("importance_update")
+            normalized_suggestion = (
+                suggested_importance.lower()
+                if isinstance(suggested_importance, str)
+                else None
+            )
+
+            if normalized_suggestion not in importance_order:
+                continue
+
+            suggested_label = importance_labels[normalized_suggestion]
+
+            if importance_order[normalized_suggestion] > importance_order[final_importance]:
+                final_importance = cast(
+                    Literal["high", "medium", "low"], normalized_suggestion
+                )
+                detail = (
+                    enhanced_understanding
+                    or "; ".join([str(item) for item in new_findings[:2] if item])
+                )
+                if detail:
+                    reason_parts.append(
+                        f"追加探索の結果、重要度を{suggested_label}（{normalized_suggestion}）に引き上げました: {detail}"
+                    )
+                else:
+                    reason_parts.append(
+                        f"追加探索の結果、重要度を{suggested_label}（{normalized_suggestion}）に引き上げました。"
+                    )
+            elif importance_order[normalized_suggestion] < importance_order[final_importance]:
+                if resolved_contradictions and not additional_contradictions:
+                    final_importance = cast(
+                        Literal["high", "medium", "low"], normalized_suggestion
+                    )
+                    detail = (
+                        enhanced_understanding
+                        or f"矛盾{len(resolved_contradictions)}件が解消されました。"
+                    )
+                    reason_parts.append(
+                        f"追加探索の結果、重要度を{suggested_label}（{normalized_suggestion}）に引き下げました: {detail}"
+                    )
+
+        filtered_reasons = [part for part in reason_parts if part]
+        if not filtered_reasons:
+            filtered_reasons.append("追加探索の結果を踏まえて重要度を再評価しました。")
+
+        # 重複を排除しつつ順序を保持
+        deduplicated_reasons = list(dict.fromkeys(filtered_reasons))
+        merged_reason = " / ".join(deduplicated_reasons)
+
+        return final_importance, merged_reason
