@@ -38,7 +38,11 @@ def create_app() -> FastAPI:
     # CORS設定: フロントエンド（localhost:3000）からのリクエストを許可
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://localhost:3001"],
+        allow_origins=[
+            "http://localhost:3000", 
+            "http://localhost:3001", 
+            "http://localhost:3002"
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

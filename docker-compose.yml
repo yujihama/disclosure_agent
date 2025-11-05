@@ -20,7 +20,7 @@ services:
       dockerfile: Dockerfile
     container_name: disclosure_backend
     ports:
-      - "8000:8000"
+      - "8002:8000"
     environment:
       - APP_REDIS_URL=redis://redis:6379/0
       - APP_CELERY_BROKER_URL=redis://redis:6379/0
@@ -68,9 +68,9 @@ services:
       dockerfile: Dockerfile
     container_name: disclosure_frontend
     ports:
-      - "3001:3000"
+      - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8002/api
     volumes:
       - ./frontend:/app
       - /app/node_modules

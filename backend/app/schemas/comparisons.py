@@ -15,6 +15,10 @@ class ComparisonRequest(BaseModel):
         min_length=2,
         description="比較対象のドキュメントIDリスト（最低2つ必要）",
     )
+    iterative_search_mode: Literal["off", "high_only", "all"] = Field(
+        default="off",
+        description="追加探索モード: off=追加探索なし, high_only=重要度highのみ, all=全セクション",
+    )
 
 
 class ComparisonTaskResponse(BaseModel):
@@ -92,6 +96,18 @@ class TextDifferenceResponse(BaseModel):
     semantic_similarity: Optional[float] = None
 
 
+class AdditionalSearchResult(BaseModel):
+    """追加探索の結果"""
+    
+    iteration: int = Field(..., description="探索回数（1, 2, ...）")
+    search_keywords: list[str] = Field(default_factory=list, description="使用した検索フレーズ")
+    found_sections: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="発見されたセクション（doc1_section, doc2_section, similarityを含む）",
+    )
+    analysis: dict[str, Any] = Field(default_factory=dict, description="追加分析の結果")
+
+
 class SectionDetailedComparisonResponse(BaseModel):
     """セクション別詳細差分レスポンス"""
     
@@ -104,6 +120,20 @@ class SectionDetailedComparisonResponse(BaseModel):
     importance: Literal["high", "medium", "low"]
     importance_reason: str
     summary: str
+    # マッピング情報（1:Nマッピング対応）
+    doc1_section_name: str = Field(default="", description="doc1のセクション名")
+    doc2_section_name: str = Field(default="", description="doc2のセクション名")
+    mapping_confidence: float = Field(default=1.0, description="マッピングの信頼度スコア")
+    mapping_method: str = Field(default="exact", description="マッピング方法（exact/semantic）")
+    # 追加探索の結果
+    additional_searches: list[AdditionalSearchResult] = Field(
+        default_factory=list,
+        description="追加探索の結果（反復探索が実行された場合）",
+    )
+    has_additional_context: bool = Field(
+        default=False,
+        description="追加探索が実行され、追加のコンテキストが含まれているかどうか",
+    )
 
 
 class ComparisonResponse(BaseModel):

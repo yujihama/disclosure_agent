@@ -44,6 +44,10 @@ def create_comparison(
     """
     import uuid
     
+    logger.info(f"=== 比較リクエスト受信 ===")
+    logger.info(f"document_ids: {req.document_ids}")
+    logger.info(f"iterative_search_mode: {req.iterative_search_mode}")
+    
     # ドキュメントの存在確認
     metadata_store = DocumentMetadataStore(settings)
     for doc_id in req.document_ids:
@@ -60,7 +64,7 @@ def create_comparison(
     
     # Celeryタスクを起動
     compare_documents_task.apply_async(
-        args=[comparison_id, req.document_ids],
+        args=[comparison_id, req.document_ids, req.iterative_search_mode],
         task_id=comparison_id
     )
     

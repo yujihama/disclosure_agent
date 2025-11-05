@@ -47,6 +47,7 @@ class DocumentUploadResult(BaseModel):
             "extracting_vision",
             "extracting_tables",
             "detecting_sections",
+            "extracting_section_content",
             "structured",
             "completed",
             "failed",

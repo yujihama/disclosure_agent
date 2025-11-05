@@ -199,7 +199,44 @@ def structure_document_task(document_id: str) -> dict[str, any]:
                 )
                 
                 sections = detector.detect_sections(text_result.pages)
-                structured_data["sections"] = sections
+                
+                # セクション情報抽出（財務指標、会計コメント、事実、主張）
+                try:
+                    logger.info(f"Starting section content extraction for {document_id}")
+                    metadata_store.update_processing_status(document_id, status="extracting_section_content")
+                    
+                    from app.services.structuring.section_content_extractor import SectionContentExtractor
+                    content_extractor = SectionContentExtractor(
+                        openai_client=openai_client,
+                        max_workers=3  # 最大3セクションを並列処理
+                    )
+                    
+                    sections_with_content = content_extractor.extract_all_sections(
+                        sections=sections,
+                        pages=text_result.pages,
+                        tables=table_result.tables if table_result.success else []
+                    )
+                    
+                    structured_data["sections"] = sections_with_content
+                    
+                    extraction_metadata["section_content_extraction"] = {
+                        "success": True,
+                        "sections_processed": len([
+                            s for s in sections_with_content.values()
+                            if "extracted_content" in s
+                        ]),
+                    }
+                    
+                    logger.info(f"Section content extraction completed for {document_id}")
+                    
+                except Exception as exc:
+                    logger.warning(f"Section content extraction failed for {document_id}: {exc}", exc_info=True)
+                    # 抽出失敗時でもセクション情報は保存
+                    structured_data["sections"] = sections
+                    extraction_metadata["section_content_extraction"] = {
+                        "success": False,
+                        "error": str(exc),
+                    }
                 
                 extraction_metadata["section_detection"] = {
                     "success": True,
@@ -254,13 +291,14 @@ def structure_document_task(document_id: str) -> dict[str, any]:
 
 
 @celery_app.task(name="comparisons.compare", bind=True)
-def compare_documents_task(self, comparison_id: str, document_ids: list[str]) -> dict:
+def compare_documents_task(self, comparison_id: str, document_ids: list[str], iterative_search_mode: str = "off") -> dict:
     """
     ドキュメント比較タスク（非同期処理）
     
     Args:
         comparison_id: 比較ID
         document_ids: 比較対象のドキュメントIDリスト
+        iterative_search_mode: 追加探索モード（"off", "high_only", "all"）
         
     Returns:
         比較結果の辞書
@@ -269,7 +307,7 @@ def compare_documents_task(self, comparison_id: str, document_ids: list[str]) ->
     import json
     from pathlib import Path
     
-    logger.info(f"比較タスク開始: comparison_id={comparison_id}, documents={document_ids}")
+    logger.info(f"比較タスク開始: comparison_id={comparison_id}, documents={document_ids}, iterative_search_mode={iterative_search_mode}")
     
     settings = get_settings()
     metadata_store = DocumentMetadataStore(settings)
@@ -358,7 +396,8 @@ def compare_documents_task(self, comparison_id: str, document_ids: list[str]) ->
         comparison_result = orchestrator.compare_documents(
             doc_infos, 
             structured_data_list,
-            progress_callback=update_progress
+            progress_callback=update_progress,
+            iterative_search_mode=iterative_search_mode
         )
         
         # 進捗状態を更新: 結果保存中

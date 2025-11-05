@@ -103,18 +103,102 @@ function StructuredDataDisplay({ document }: { document: DocumentUploadResult })
             Detected Sections ({Object.keys((sd as any).sections).length})
           </summary>
           <div className="max-h-96 overflow-y-auto border-t border-white/10 px-4 py-3">
-            <div className="space-y-1.5">
+            <div className="space-y-3">
               {Object.entries((sd as any).sections).map(([sectionName, sectionInfo]: [string, any]) => (
-                <div key={sectionName} className="border-b border-white/5 py-2 last:border-0">
-                  <p className="text-xs font-medium text-white">{sectionName}</p>
-                  <p className="mt-0.5 text-[10px] text-white/50">
-                    Pages {sectionInfo.start_page}-{sectionInfo.end_page}
-                    {" · "}
-                    {sectionInfo.char_count?.toLocaleString() ?? 0} chars
-                    {" · "}
-                    {((sectionInfo.confidence ?? 0) * 100).toFixed(0)}% confidence
-                  </p>
-                </div>
+                <details key={sectionName} className="rounded border border-white/10 bg-white/5">
+                  <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-white/90 hover:bg-white/10">
+                    {sectionName}
+                    <span className="ml-2 text-white/50">
+                      (p.{sectionInfo.start_page}-{sectionInfo.end_page} · {sectionInfo.char_count?.toLocaleString() ?? 0} chars · {((sectionInfo.confidence ?? 0) * 100).toFixed(0)}% confidence)
+                    </span>
+                  </summary>
+                  <div className="border-t border-white/10 px-3 py-3">
+                    {sectionInfo.extracted_content ? (
+                      <div className="space-y-2">
+                        {/* 財務指標・数値情報 */}
+                        {sectionInfo.extracted_content.financial_data && sectionInfo.extracted_content.financial_data.length > 0 && (
+                          <div className="rounded bg-blue-500/10 border border-blue-500/30 p-2">
+                            <div className="text-[10px] font-semibold text-blue-200 mb-1">💰 財務指標・数値情報 ({sectionInfo.extracted_content.financial_data.length})</div>
+                            <div className="space-y-1">
+                              {sectionInfo.extracted_content.financial_data.map((item: any, idx: number) => (
+                                <div key={idx} className="text-[10px] text-blue-100/80">
+                                  • {item.item}: {typeof item.value === 'object' && item.value !== null ? (
+                                    <span className="ml-2 block pl-2 border-l border-blue-500/30 mt-1">
+                                      {Object.entries(item.value).map(([k, v]: [string, any]) => (
+                                        <div key={k} className="text-[9px]">
+                                          {k}: {String(v)}
+                                        </div>
+                                      ))}
+                                    </span>
+                                  ) : `${item.value ?? ''} ${item.unit || ''}`} {item.period && `(${item.period})`}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* 会計処理上のコメント */}
+                        {sectionInfo.extracted_content.accounting_notes && sectionInfo.extracted_content.accounting_notes.length > 0 && (
+                          <div className="rounded bg-amber-500/10 border border-amber-500/30 p-2">
+                            <div className="text-[10px] font-semibold text-amber-200 mb-1">📝 会計処理上のコメント ({sectionInfo.extracted_content.accounting_notes.length})</div>
+                            <div className="space-y-1">
+                              {sectionInfo.extracted_content.accounting_notes.map((item: any, idx: number) => (
+                                <div key={idx} className="text-[10px] text-amber-100/80">
+                                  • <span className="font-medium">{item.topic}:</span> {item.content}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* 事実情報 */}
+                        {sectionInfo.extracted_content.factual_info && sectionInfo.extracted_content.factual_info.length > 0 && (
+                          <div className="rounded bg-emerald-500/10 border border-emerald-500/30 p-2">
+                            <div className="text-[10px] font-semibold text-emerald-200 mb-1">📊 事実情報 ({sectionInfo.extracted_content.factual_info.length})</div>
+                            <div className="space-y-1">
+                              {sectionInfo.extracted_content.factual_info.map((item: any, idx: number) => (
+                                <div key={idx} className="text-[10px] text-emerald-100/80">
+                                  • <span className="font-medium">[{item.category}]</span> {item.item}: {typeof item.value === 'object' && item.value !== null ? (
+                                    <span className="ml-2 block pl-2 border-l border-emerald-500/30 mt-1 space-y-0.5">
+                                      {Object.entries(item.value).map(([k, v]: [string, any]) => (
+                                        <div key={k} className="text-[9px]">
+                                          {k}: {String(v)}
+                                        </div>
+                                      ))}
+                                    </span>
+                                  ) : (item.value ?? '')}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* 主張・メッセージ */}
+                        {sectionInfo.extracted_content.messages && sectionInfo.extracted_content.messages.length > 0 && (
+                          <div className="rounded bg-purple-500/10 border border-purple-500/30 p-2">
+                            <div className="text-[10px] font-semibold text-purple-200 mb-1">💬 主張・メッセージ ({sectionInfo.extracted_content.messages.length})</div>
+                            <div className="space-y-1">
+                              {sectionInfo.extracted_content.messages.map((item: any, idx: number) => (
+                                <div key={idx} className="text-[10px] text-purple-100/80">
+                                  • <span className="font-medium">[{item.type}]</span> {item.content}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {!sectionInfo.extracted_content.financial_data?.length && 
+                         !sectionInfo.extracted_content.accounting_notes?.length && 
+                         !sectionInfo.extracted_content.factual_info?.length && 
+                         !sectionInfo.extracted_content.messages?.length && (
+                          <p className="text-[10px] text-white/40">抽出されたコンテンツがありません</p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-white/40">extracted_content が利用できません</p>
+                    )}
+                  </div>
+                </details>
               ))}
             </div>
           </div>
@@ -216,6 +300,7 @@ const processingStatusLabel: Record<string, string> = {
   extracting_vision: "画像解析中",
   extracting_tables: "テーブル抽出中",
   detecting_sections: "セクション検出中",
+  extracting_section_content: "セクション情報抽出中",
   structured: "構造化完了",
   completed: "完了",
   failed: "失敗",
@@ -239,6 +324,7 @@ export default function HomePage() {
   
   // 比較機能用のstate
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
+  const [iterativeSearchMode, setIterativeSearchMode] = useState<"off" | "high_only" | "all">("off");
   const [isComparing, setIsComparing] = useState(false);
   const [comparisonResult, setComparisonResult] = useState<any>(null);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
@@ -363,6 +449,10 @@ export default function HomePage() {
   
   // 比較実行
   const handleCompare = useCallback(async () => {
+    console.log("=== handleCompare 開始 ===");
+    console.log("selectedDocIds:", Array.from(selectedDocIds));
+    console.log("iterativeSearchMode:", iterativeSearchMode);
+    
     if (selectedDocIds.size < 2) {
       setComparisonError("比較には最低2つのドキュメントを選択してください。");
       return;
@@ -378,7 +468,8 @@ export default function HomePage() {
     
     try {
       // Step 1: 比較タスクを開始
-      const task = await compareDocuments(Array.from(selectedDocIds));
+      console.log("compareDocuments を呼び出します - iterativeSearchMode:", iterativeSearchMode);
+      const task = await compareDocuments(Array.from(selectedDocIds), iterativeSearchMode);
       const comparisonId = task.comparison_id;
       
       // Step 2: ポーリングでステータスを確認
@@ -434,7 +525,7 @@ export default function HomePage() {
       setComparisonError(error instanceof Error ? error.message : "比較に失敗しました");
       setIsComparing(false);
     }
-  }, [selectedDocIds, loadComparisonHistory]);
+  }, [selectedDocIds, iterativeSearchMode, loadComparisonHistory]);
 
   const handleFiles = useCallback(
     (incomingList: FileList | File[]) => {
@@ -828,9 +919,33 @@ export default function HomePage() {
                 <span className="text-sm text-white/50">
                   {selectedDocIds.size} selected
                 </span>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-white/70">追加探索:</label>
+                  <select
+                    value={iterativeSearchMode}
+                    onChange={(e) => {
+                      const newValue = e.target.value as "off" | "high_only" | "all";
+                      console.log("=== select onChange ===");
+                      console.log("旧値:", iterativeSearchMode);
+                      console.log("新値:", newValue);
+                      setIterativeSearchMode(newValue);
+                      console.log("setIterativeSearchMode 呼び出し完了");
+                    }}
+                    disabled={isComparing}
+                    className="rounded-md border border-white/20 bg-white/5 px-2 py-1 text-xs text-white/80 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    <option value="off">OFF: 追加探索なし（高速）</option>
+                    <option value="high_only">重要度Highのみ: 重要なセクションのみ追加探索</option>
+                    <option value="all">すべて: 全セクションで追加探索（時間がかかる）</option>
+                  </select>
+                </div>
                 <button
                   type="button"
-                  onClick={handleCompare}
+                  onClick={() => {
+                    console.log("=== Compareボタンクリック ===");
+                    console.log("現在の iterativeSearchMode:", iterativeSearchMode);
+                    handleCompare();
+                  }}
                   disabled={selectedDocIds.size < 2 || isComparing}
                   className="rounded-md bg-cyan-500/20 px-4 py-2 text-sm font-medium text-cyan-100 transition-colors hover:bg-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-30"
                 >
@@ -1336,28 +1451,114 @@ export default function HomePage() {
                       if (searchQuery) {
                         filtered = filtered.filter((d: any) => 
                           d.section_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          d.summary?.toLowerCase().includes(searchQuery.toLowerCase())
+                          d.summary?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          d.doc1_section_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          d.doc2_section_name?.toLowerCase().includes(searchQuery.toLowerCase())
                         );
                       }
-                      // Doc1のページ番号でソート（昇順）
+                      // Doc1のページ番号でソート（昇順）、次にDoc2のページ番号でソート
                       filtered.sort((a: any, b: any) => {
                         const getStartPage = (pageRange: string) => {
                           if (!pageRange) return 0;
                           const match = pageRange.match(/^(\d+)/);
                           return match ? parseInt(match[1], 10) : 0;
                         };
-                        return getStartPage(a.doc1_page_range) - getStartPage(b.doc1_page_range);
+                        const doc1Diff = getStartPage(a.doc1_page_range) - getStartPage(b.doc1_page_range);
+                        if (doc1Diff !== 0) return doc1Diff;
+                        // 同じdoc1ページの場合、doc2ページでソート
+                        return getStartPage(a.doc2_page_range) - getStartPage(b.doc2_page_range);
                       });
-                      return filtered;
-                    })().map((detail: any, idx: number) => (
-                      <div key={idx} className="rounded-lg border border-white/20 bg-white/5 p-4 transition-all hover:border-white/30 hover:bg-white/10">
+                      
+                      // 1:Nマッピング情報を計算
+                      const doc1SectionCounts = new Map<string, number>();
+                      const doc1SectionIndices = new Map<string, number>();
+                      filtered.forEach((d: any) => {
+                        const key = d.doc1_section_name || d.section_name;
+                        doc1SectionCounts.set(key, (doc1SectionCounts.get(key) || 0) + 1);
+                      });
+                      
+                      return filtered.map((detail: any, idx: number) => {
+                        const doc1Key = detail.doc1_section_name || detail.section_name;
+                        const currentIndex = (doc1SectionIndices.get(doc1Key) || 0) + 1;
+                        doc1SectionIndices.set(doc1Key, currentIndex);
+                        const totalCount = doc1SectionCounts.get(doc1Key) || 1;
+                        const isMultiMapping = totalCount > 1;
+                        
+                        return { detail, idx, currentIndex, totalCount, isMultiMapping };
+                      });
+                    })().map(({ detail, idx, currentIndex, totalCount, isMultiMapping }) => (
+                      <div key={idx} className={`rounded-lg border border-white/20 bg-white/5 p-4 transition-all hover:border-white/30 hover:bg-white/10 relative overflow-hidden ${
+                        isMultiMapping ? 'pl-6' : ''
+                      }`}>
+                        {/* 1:Nマッピング用のカラーバー */}
+                        {isMultiMapping && (
+                          <div 
+                            className={`absolute left-0 top-0 bottom-0 w-1 ${
+                              currentIndex === 1 ? 'bg-blue-500' :
+                              currentIndex === 2 ? 'bg-emerald-500' :
+                              currentIndex === 3 ? 'bg-purple-500' :
+                              currentIndex === 4 ? 'bg-pink-500' :
+                              'bg-cyan-500'
+                            }`}
+                          />
+                        )}
+                        
                         {/* セクションヘッダー */}
                         <div className="mb-3 flex items-start justify-between gap-3">
-                          <h4 className="flex-1 text-base font-semibold text-white">
-                            {detail.section_name}
-                          </h4>
+                          <div className="flex-1">
+                            <h4 className="text-base font-semibold text-white mb-1">
+                              {detail.section_name}
+                              {isMultiMapping && (
+                                <span className="ml-2 text-xs font-normal text-white/50">
+                                  ({currentIndex}/{totalCount})
+                                </span>
+                              )}
+                            </h4>
+                            
+                            {/* マッピング情報（古い比較結果との互換性のためフォールバック付き） */}
+                            {(detail.doc1_section_name || detail.doc2_section_name || detail.mapping_method) && (
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mt-1 text-xs text-white/60">
+                                {(detail.doc1_section_name || detail.doc2_section_name) && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">{detail.doc1_section_name || detail.section_name}</span>
+                                    <span>→</span>
+                                    <span className="font-medium text-blue-300">{detail.doc2_section_name || detail.section_name}</span>
+                                  </div>
+                                )}
+                                
+                                {/* マッピング方法と信頼度 */}
+                                {detail.mapping_method && (
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    {detail.mapping_method === "exact" ? (
+                                      <span className="rounded px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-medium">
+                                        完全一致 ✓
+                                      </span>
+                                    ) : (
+                                      <>
+                                        <span className="rounded px-1.5 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-medium">
+                                          {detail.mapping_method}
+                                        </span>
+                                        {detail.mapping_confidence != null && (
+                                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                            detail.mapping_confidence >= 0.9
+                                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                              : detail.mapping_confidence >= 0.7
+                                                ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30"
+                                                : "bg-orange-500/20 text-orange-300 border border-orange-500/30"
+                                          }`}>
+                                            信頼度: {Math.round(detail.mapping_confidence * 100)}%
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          
                           <span
-                            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                            className={`rounded-md px-2.5 py-1 text-xs font-medium flex-shrink-0 ${
                               detail.importance === "high"
                                 ? "bg-amber-500/20 text-amber-200 border border-amber-500/30"
                                 : detail.importance === "medium"
@@ -1386,6 +1587,83 @@ export default function HomePage() {
                             </p>
                           )}
                         </div>
+                        
+                        {/* 追加探索結果 */}
+                        {detail.has_additional_context && detail.additional_searches && detail.additional_searches.length > 0 && (
+                          <details className="mb-4 rounded-md border border-cyan-500/30 bg-cyan-500/10 p-3" open>
+                            <summary className="cursor-pointer text-sm font-semibold text-cyan-200 hover:text-cyan-100">
+                              追加探索結果 ({detail.additional_searches.length}回)
+                            </summary>
+                            <div className="mt-3 space-y-3 border-t border-cyan-500/20 pt-3">
+                              {detail.additional_searches.map((search: any, searchIdx: number) => (
+                                <div key={searchIdx} className="rounded-md border border-cyan-500/20 bg-cyan-500/5 p-3">
+                                  <div className="mb-2 flex items-center gap-2">
+                                    <span className="rounded px-2 py-1 bg-cyan-500/20 text-cyan-200 text-xs font-medium">
+                                      第{search.iteration}回探索
+                                    </span>
+                                    {search.found_sections && search.found_sections.length > 0 && (
+                                      <span className="text-xs text-cyan-200/70">
+                                        {search.found_sections.length}個のセクションを発見
+                                      </span>
+                                    )}
+                                  </div>
+                                  
+                                  {search.search_keywords && search.search_keywords.length > 0 && (
+                                    <div className="mb-2">
+                                      <div className="text-xs font-medium text-cyan-200/90 mb-1">検索フレーズ:</div>
+                                      <div className="flex flex-wrap gap-1">
+                                        {search.search_keywords.map((keyword: string, kwIdx: number) => (
+                                          <span key={kwIdx} className="rounded px-2 py-0.5 bg-cyan-500/20 text-cyan-200 text-xs">
+                                            {keyword}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {search.found_sections && search.found_sections.length > 0 && (
+                                    <div className="mb-2">
+                                      <div className="text-xs font-medium text-cyan-200/90 mb-1">発見されたセクション:</div>
+                                      <div className="space-y-1">
+                                        {search.found_sections.map((found: any, foundIdx: number) => (
+                                          <div key={foundIdx} className="flex items-center gap-2 text-xs text-cyan-200/80">
+                                            <span>{found.doc1_section || found.doc2_section}</span>
+                                            {found.similarity != null && (
+                                              <span className="text-cyan-200/50">
+                                                (類似度: {Math.round(found.similarity * 100)}%)
+                                              </span>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {search.analysis && Object.keys(search.analysis).length > 0 && (
+                                    <div className="mt-2 border-t border-cyan-500/20 pt-2">
+                                      {search.analysis.new_findings && search.analysis.new_findings.length > 0 && (
+                                        <div className="mb-2">
+                                          <div className="text-xs font-medium text-cyan-200/90 mb-1">新たに分かったこと:</div>
+                                          <ul className="list-disc list-inside space-y-1 text-xs text-cyan-200/80">
+                                            {search.analysis.new_findings.map((finding: string, findingIdx: number) => (
+                                              <li key={findingIdx}>{finding}</li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                      {search.analysis.enhanced_understanding && (
+                                        <div className="text-xs text-cyan-200/80">
+                                          <span className="font-medium text-cyan-200/90">理解の深まり: </span>
+                                          {search.analysis.enhanced_understanding}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
                         
                         {/* 変更詳細 */}
                         {detail.text_changes && Object.keys(detail.text_changes).length > 0 && (() => {
@@ -1450,6 +1728,117 @@ export default function HomePage() {
                               {/* 年度間比較・整合性チェックの場合 */}
                               {!isCompanyComparison && (
                                 <>
+                                  {/* 整合性チェック専用の表示 */}
+                                  {detail.text_changes.contradictions && detail.text_changes.contradictions.length > 0 && (
+                                    <details className="rounded-md border border-rose-500/30 bg-rose-500/5">
+                                      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-rose-200 hover:bg-rose-500/10">
+                                        ⚠️ 矛盾・不整合 ({detail.text_changes.contradictions.length})
+                                      </summary>
+                                      <div className="border-t border-rose-500/20 px-3 py-2">
+                                        <div className="space-y-2">
+                                          {detail.text_changes.contradictions.map((item: any, i: number) => (
+                                            <div key={i} className="text-xs rounded bg-white/5 p-2">
+                                              <div className="font-medium text-rose-100/90 mb-1">{item.type}</div>
+                                              <div className="text-rose-200/80 mb-1">{item.description}</div>
+                                              <div className="text-rose-300/70 text-[11px]">影響: {item.impact}</div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </details>
+                                  )}
+                                  
+                                  {detail.text_changes.normal_differences && detail.text_changes.normal_differences.length > 0 && (
+                                    <details className="rounded-md border border-blue-500/30 bg-blue-500/5">
+                                      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-blue-200 hover:bg-blue-500/10">
+                                        📋 書類の性質による正常な違い ({detail.text_changes.normal_differences.length})
+                                      </summary>
+                                      <div className="border-t border-blue-500/20 px-3 py-2">
+                                        <div className="space-y-2">
+                                          {detail.text_changes.normal_differences.map((item: any, i: number) => (
+                                            <div key={i} className="text-xs rounded bg-white/5 p-2">
+                                              <div className="font-medium text-blue-100/90 mb-1">{item.aspect}</div>
+                                              <div className="text-blue-200/80 mb-1">
+                                                <span className="font-medium">{comparisonResult?.doc1_info?.document_type_label}:</span> {item.doc1_approach}
+                                              </div>
+                                              <div className="text-purple-200/80 mb-1">
+                                                <span className="font-medium">{comparisonResult?.doc2_info?.document_type_label}:</span> {item.doc2_approach}
+                                              </div>
+                                              <div className="text-blue-300/70 text-[11px]">理由: {item.reason}</div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </details>
+                                  )}
+                                  
+                                  {detail.text_changes.complementary_info && detail.text_changes.complementary_info.length > 0 && (
+                                    <details className="rounded-md border border-emerald-500/30 bg-emerald-500/5">
+                                      <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-emerald-200 hover:bg-emerald-500/10">
+                                        🔄 相互補完関係 ({detail.text_changes.complementary_info.length})
+                                      </summary>
+                                      <div className="border-t border-emerald-500/20 px-3 py-2">
+                                        <div className="space-y-2">
+                                          {detail.text_changes.complementary_info.map((item: any, i: number) => (
+                                            <div key={i} className="text-xs rounded bg-white/5 p-2">
+                                              <div className="font-medium text-emerald-100/90 mb-1">{item.topic}</div>
+                                              <div className="text-emerald-200/80 mb-1">
+                                                <span className="font-medium">{comparisonResult?.doc1_info?.document_type_label}:</span> {item.doc1_contribution}
+                                              </div>
+                                              <div className="text-emerald-200/80 mb-1">
+                                                <span className="font-medium">{comparisonResult?.doc2_info?.document_type_label}:</span> {item.doc2_contribution}
+                                              </div>
+                                              <div className="text-emerald-300/70 text-[11px]">{item.relationship}</div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </details>
+                                  )}
+                                  
+                                  {detail.text_changes.consistency_score && (
+                                    <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
+                                      <div className="flex items-center justify-between text-xs">
+                                        <span className="text-white/70">整合性スコア:</span>
+                                        <div className="flex items-center gap-2">
+                                          <div className="flex gap-0.5">
+                                            {[1, 2, 3, 4, 5].map((score) => (
+                                              <div
+                                                key={score}
+                                                className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold ${
+                                                  score <= detail.text_changes.consistency_score
+                                                    ? score <= 2
+                                                      ? 'bg-rose-500 text-white'
+                                                      : score === 3
+                                                        ? 'bg-amber-500 text-white'
+                                                        : 'bg-emerald-500 text-white'
+                                                    : 'bg-white/10 text-white/30'
+                                                }`}
+                                              >
+                                                {score}
+                                              </div>
+                                            ))}
+                                          </div>
+                                          <span className={`font-medium ${
+                                            detail.text_changes.consistency_score <= 2
+                                              ? 'text-rose-300'
+                                              : detail.text_changes.consistency_score === 3
+                                                ? 'text-amber-300'
+                                                : 'text-emerald-300'
+                                          }`}>
+                                            {detail.text_changes.consistency_score}/5
+                                          </span>
+                                        </div>
+                                      </div>
+                                      {detail.text_changes.consistency_reason && (
+                                        <div className="mt-2 text-[11px] text-white/60 leading-relaxed">
+                                          {detail.text_changes.consistency_reason}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  
+                                  {/* 年度間比較の表示 */}
                                   {detail.text_changes.added && detail.text_changes.added.length > 0 && (
                                     <details className="rounded-md border border-emerald-500/30 bg-emerald-500/5">
                                       <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-emerald-200 hover:bg-emerald-500/10">

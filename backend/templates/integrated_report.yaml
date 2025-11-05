@@ -1,159 +1,131 @@
-# 統合報告書テンプレート
-# IIRC（国際統合報告評議会）のフレームワークに基づく記載項目
-
 document_type: integrated_report
 display_name: 統合報告書
-description: 企業の財務・非財務情報を統合的に報告する任意開示書類
+description: 企業の財務資本と非財務資本（知的、人的、社会・関係、製造、自然資本）を統合し、短期・中期・長期にわたる価値創造プロセスと持続的成長に向けた戦略をステークホルダーに報告するための任意開示書類。
 
 sections:
-  - id: ceo_message
-    name: トップメッセージ
+  - id: introduction
+    name: イントロダクション
     required: true
-    alternative_names:
-      - 社長メッセージ
-      - 代表挨拶
-      - CEOメッセージ
     items:
-      - 経営方針
-      - 中長期ビジョン
-      - ステークホルダーへのメッセージ
-  
-  - id: value_creation
-    name: 価値創造プロセス
-    required: true
-    alternative_names:
-      - ビジネスモデル
-      - 価値創造モデル
-    items:
-      - ビジネスモデルの概要
-      - 経営資本（6つの資本）
-      - バリューチェーン
-      - アウトプット・アウトカム
-  
-  - id: strategy
-    name: 戦略
-    required: true
-    subsections:
-      - id: management_strategy
-        name: 経営戦略
+      - id: ceo_message
+        name: トップメッセージ（CEOメッセージ）
         required: true
-        items:
-          - 中期経営計画
-          - 成長戦略
-          - 重点施策
-      
+        description: 経営トップからステークホルダーへの約束、事業環境認識、経営の基本方針、中長期的なビジョンと価値創造へのコミットメントを記載。
+      - id: corporate_philosophy
+        name: グループ理念・パーパス
+        required: true
+        description: 企業の存在意義、使命、目指す姿を記載。
+      - id: value_creation_highlights
+        name: 価値創造のハイライト
+        required: true
+        description: 当期の主要な財務・非財務成果の概要を記載。
+      - id: editorial_policy
+        name: 編集方針
+        required: true
+        description: 報告書の目的、対象読者、報告範囲、対象期間、参考にしたガイドライン（IIRCフレームワークなど）を記載。
+
+  - id: value_creation_story
+    name: 価値創造ストーリーの中核
+    required: true
+    items:
+      - id: value_creation_process
+        name: 価値創造プロセス／ビジネスモデル
+        required: true
+        description: 6つの資本（インプット）、事業活動、アウトプット、アウトカムの関係性を示し、企業がどのように価値を創造しているかを具体的に説明。
+      - id: external_environment
+        name: 外部環境認識（機会とリスク）
+        required: true
+        description: マクロ環境、事業環境における機会とリスク、およびその対応について記載。
+
+  - id: strategy_and_resource_allocation
+    name: 戦略と資源配分
+    required: true
+    items:
+      - id: mid_long_term_strategy
+        name: 中長期経営戦略
+        required: true
+        description: 中期経営計画の概要、進捗状況、目標、成長戦略、重点施策と資源配分（研究開発投資、設備投資、人材投資など）を記載。
+      - id: cfo_message
+        name: CFOメッセージ
+        required: true
+        description: 財務戦略、資本政策、経営計画と連動した財務目標と実績評価について記載。
+      - id: business_strategy
+        name: 事業別戦略
+        required: true
+        description: 各事業セグメントのトップによる戦略説明（市場環境、強み、成長戦略、主要KPI）を記載。
+
+  - id: performance_and_results
+    name: パフォーマンスと実績
+    required: true
+    items:
+      - id: financial_highlights
+        name: 財務ハイライト
+        required: true
+        description: 過去の主要財務指標の推移、財政状態、キャッシュ・フローの状況分析を記載。
+      - id: non_financial_highlights
+        name: 非財務ハイライト
+        required: true
+        description: ESGに関する主要KPIの目標と実績、マテリアリティごとの取り組みと成果を記載。
+
+  - id: sustainability_esg
+    name: サステナビリティ（ESG）
+    required: true
+    items:
       - id: sustainability_strategy
         name: サステナビリティ戦略
         required: true
-        items:
-          - マテリアリティ（重要課題）
-          - SDGsへの貢献
-          - ESG目標とKPI
-  
-  - id: business_overview
-    name: 事業概要
-    required: true
-    items:
-      - 事業セグメント
-      - 主要製品・サービス
-      - 市場環境
-      - 競合優位性
-  
-  - id: financial_info
-    name: 財務情報
-    required: true
-    items:
-      - 業績ハイライト
-      - 財務データサマリー
-      - 主要財務指標の推移
-    tables:
-      - 連結損益計算書
-      - 連結貸借対照表
-      - 連結キャッシュ・フロー計算書
-  
-  - id: esg_info
-    name: ESG情報
-    required: true
-    subsections:
+        description: サステナビリティに関する基本的な考え方、マテリアリティの特定プロセスと内容、推進体制を記載。
       - id: environment
         name: 環境（E）
         required: true
-        items:
-          - 気候変動対応
-          - カーボンニュートラル目標
-          - 環境マネジメント
-          - 資源循環
-          - 生物多様性
-      
+        description: TCFD提言に基づく気候変動への対応、カーボンニュートラル目標、資源循環、生物多様性保全への取り組みを記載。
       - id: social
         name: 社会（S）
         required: true
-        items:
-          - 人権尊重
-          - 人材育成
-          - ダイバーシティ&インクルージョン
-          - 労働安全衛生
-          - サプライチェーンマネジメント
-          - 地域社会貢献
-      
-      - id: governance
-        name: ガバナンス（G）
+        description: 人的資本、人権、サプライチェーンマネジメント、社会貢献活動について記載。
+      - id: innovation_intellectual_capital
+        name: イノベーション・知的資本
         required: true
-        items:
-          - コーポレートガバナンス体制
-          - 取締役会の構成
-          - 内部統制
-          - リスクマネジメント
-          - コンプライアンス
-  
-  - id: risks_opportunities
-    name: リスクと機会
-    required: true
-    items:
-      - 事業リスク
-      - 機会の認識
-      - リスク対応策
-  
-  - id: performance
-    name: パフォーマンス
-    required: true
-    items:
-      - 財務パフォーマンス
-      - 非財務パフォーマンス
-      - ESG指標
-      - KPI達成状況
-  
-  - id: governance_detail
+        description: 研究開発戦略、知的財産戦略について記載。
+
+  - id: governance
     name: ガバナンス
     required: true
     items:
-      - 役員一覧
-      - 役員報酬
-      - 株主との対話
-  
+      - id: corporate_governance
+        name: コーポレート・ガバナンス
+        required: true
+        description: ガバナンス体制の概要、取締役会の実効性評価、スキルマトリックスを記載。
+      - id: board_of_directors
+        name: 役員紹介
+        required: true
+        description: 取締役、監査役、執行役員の略歴・担当を記載。
+      - id: outside_director_message
+        name: 社外取締役メッセージ／座談会
+        required: false
+        description: 独立した立場からの経営に対する評価や提言を記載。
+      - id: executive_compensation
+        name: 役員報酬
+        required: true
+        description: 報酬決定方針、業績連動報酬の仕組みを記載。
+      - id: risk_management
+        name: リスクマネジメント
+        required: true
+        description: リスク管理体制、コンプライアンス、内部統制について記載。
+
   - id: data_section
     name: データセクション
     required: true
     items:
-      - 11年間の財務データ
-      - ESGデータ
-      - 会社情報
-      - 株式情報
-
-important_sections:
-  - ceo_message
-  - value_creation
-  - strategy
-  - esg_info
-  - risks_opportunities
-
-keywords_for_detection:
-  - 統合報告書
-  - Integrated Report
-  - 価値創造
-  - サステナビリティ
-  - ESG
-  - マテリアリティ
-  - ステークホルダー
-
-
+      - id: financial_summary
+        name: 財務サマリー
+        required: true
+        description: 11年間などの長期的な財務データの推移を記載。
+      - id: esg_data
+        name: ESGデータ集
+        required: true
+        description: ESGに関する詳細なデータをまとめて記載。
+      - id: corporate_information
+        name: 会社情報・株式情報
+        required: true
+        description: 会社概要、沿革、株主構成、格付情報などを記載。

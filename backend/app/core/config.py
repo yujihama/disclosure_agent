@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     api_prefix: str = "/api"
     openai_api_key: str | None = None
-    openai_model: str = "gpt-4.1"
+    openai_model: str = "gpt-5"
     openai_timeout_seconds: float = 120.0
     document_classification_use_llm: bool = True
     document_classification_max_prompt_chars: int = 4000

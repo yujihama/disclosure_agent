@@ -270,6 +270,10 @@ class SectionDetector:
         """
         # subsections（サブセクション）を処理
         for subsection in parent.get("subsections", []):
+            # subsectionが辞書でない場合（文字列など）はスキップ
+            if not isinstance(subsection, dict):
+                continue
+            
             subsection_name = subsection.get("name")
             if subsection_name:
                 # 親階層と結合
@@ -281,6 +285,10 @@ class SectionDetector:
         
         # items（項目）を処理
         for item in parent.get("items", []):
+            # itemが辞書でない場合（文字列など）はスキップ
+            if not isinstance(item, dict):
+                continue
+            
             item_name = item.get("name")
             if item_name:
                 # 親階層と結合
