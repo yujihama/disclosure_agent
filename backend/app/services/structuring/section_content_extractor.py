@@ -168,7 +168,7 @@ class SectionContentExtractor:
         section_tables = []
         
         for table in all_tables:
-            table_page = table.get("page", 0)
+            table_page = table.get("page_number", table.get("page", 0))
             if table_page in pages:
                 section_tables.append(table)
         

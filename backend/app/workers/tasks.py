@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from ..core.config import get_settings
 from ..services.metadata_store import DocumentMetadataStore
@@ -55,7 +55,7 @@ def process_documents_task(document_ids: list[str]) -> dict[str, list[dict[str, 
             logger.warning("No metadata found for document %s", document_id)
             processed.append({"document_id": document_id, "status": "failed"})
         except Exception as exc:  # pragma: no cover - defensive guard
-            logger.exception("Failed to process document %s", document_id, exc_info=exc)
+            logger.exception("Failed to process document %s: %s", document_id, exc)
             try:
                 metadata_store.update_processing_status(document_id, status="failed")
             except:
@@ -85,12 +85,12 @@ def cleanup_expired_documents_task() -> dict[str, int]:
         logger.info(f"Cleanup task completed: deleted {deleted_count} expired documents")
         return {"deleted_count": deleted_count}
     except Exception as exc:  # pragma: no cover - defensive guard
-        logger.exception("Cleanup task failed", exc_info=exc)
+        logger.exception("Cleanup task failed: %s", exc)
         return {"deleted_count": 0, "error": str(exc)}
 
 
 @celery_app.task(name="documents.structure")
-def structure_document_task(document_id: str) -> dict[str, any]:
+def structure_document_task(document_id: str) -> dict[str, Any]:
     """
     ドキュメントを構造化処理するタスク
     
@@ -282,7 +282,7 @@ def structure_document_task(document_id: str) -> dict[str, any]:
         logger.error(f"Metadata not found for document {document_id}")
         return {"document_id": document_id, "status": "failed", "error": "Metadata not found"}
     except Exception as exc:
-        logger.exception(f"Failed to structure document {document_id}", exc_info=exc)
+        logger.exception("Failed to structure document %s: %s", document_id, exc)
         try:
             metadata_store.update_processing_status(document_id, status="failed")
         except:
@@ -430,8 +430,8 @@ def compare_documents_task(self, comparison_id: str, document_ids: list[str], it
             "result_path": str(result_path),
         }
         
-    except Exception as exc:
-        logger.exception(f"比較タスク失敗: comparison_id={comparison_id}", exc_info=exc)
+        except Exception as exc:
+            logger.exception("比較タスク失敗: comparison_id=%s: %s", comparison_id, exc)
         return {
             "status": "failed",
             "comparison_id": comparison_id,
