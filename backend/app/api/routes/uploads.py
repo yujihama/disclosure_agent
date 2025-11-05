@@ -103,7 +103,7 @@ async def upload_documents(
     except UploadValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:  # pragma: no cover - defensive logging
-        logger.exception("Unexpected error while processing uploads", exc_info=exc)
+        logger.exception("Unexpected error while processing uploads")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to process the provided documents.",
@@ -136,7 +136,7 @@ async def upload_documents(
             task_id = async_result.id
             logger.info(f"Enqueued Celery task {task_id} for {len(queueable_ids)} documents")
         except Exception as exc:  # pragma: no cover - Celery connection optional in tests
-            logger.warning("Failed to enqueue Celery task: %s", exc, exc_info=exc)
+            logger.warning("Failed to enqueue Celery task: %s", exc, exc_info=True)
 
     response_documents = [
         DocumentUploadResult(**doc.to_dict()) for doc in batch_result.documents
@@ -238,7 +238,7 @@ async def update_document_type(
                 f"after manual type selection: {selected_type}"
             )
         except Exception as exc:  # pragma: no cover - Celery connection optional
-            logger.warning("Failed to enqueue structuring task: %s", exc, exc_info=exc)
+            logger.warning("Failed to enqueue structuring task: %s", exc, exc_info=True)
 
     result = _metadata_to_result(metadata, classifier)
     return DocumentMutationResponse(document=result)
