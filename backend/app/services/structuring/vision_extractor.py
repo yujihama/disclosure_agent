@@ -5,9 +5,10 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import pymupdf  # PyMuPDF for rendering pages
 from openai import OpenAI
@@ -24,7 +25,7 @@ class VisionExtractionResult:
         success: bool,
         text: str = "",
         page_count: int = 0,
-        pages: Optional[list[dict[str, any]]] = None,
+        pages: Optional[list[dict[str, Any]]] = None,
         error: Optional[str] = None,
         tokens_used: int = 0,
     ):
@@ -110,10 +111,9 @@ class VisionExtractor:
             doc.close()
             return base64_image
 
-        except Exception as exc:
+        except Exception:
             logger.exception(
-                f"Failed to convert page {page_num} to image from {pdf_path}",
-                exc_info=exc,
+                "Failed to convert page %s to image from %s", page_num, pdf_path
             )
             return None
 
@@ -131,49 +131,68 @@ class VisionExtractor:
         Returns:
             Tuple of (extracted_text, tokens_used)
         """
-        try:
-            system_prompt = (
-                "あなたは日本語の企業開示資料(有価証券報告書、統合報告書、決算短信等)から"
-                "正確にテキストを抽出するアシスタントです。画像から全ての文字を読み取り、"
-                "元のレイアウトや表構造を可能な限り保持してください。"
-            )
+        system_prompt = (
+            "あなたは日本語の企業開示資料(有価証券報告書、統合報告書、決算短信等)から"
+            "正確にテキストを抽出するアシスタントです。画像から全ての文字を読み取り、"
+            "元のレイアウトや表構造を可能な限り保持してください。"
+        )
 
-            user_prompt = f"ページ {page_number} の内容を抽出してください。"
-            if context:
-                user_prompt += f"\n\n直前のページの文脈: {context[:500]}"
+        user_prompt = f"ページ {page_number} の内容を抽出してください。"
+        if context:
+            user_prompt += f"\n\n直前のページの文脈: {context[:500]}"
 
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": user_prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{base64_image}"
-                            },
-                        },
-                    ],
-                },
-            ]
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}},
+                ],
+            },
+        ]
 
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                max_tokens=4096,
-            )
+        delay = 1.0
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    max_tokens=4096,
+                )
 
-            extracted_text = response.choices[0].message.content
-            tokens_used = response.usage.total_tokens
+                extracted_text = response.choices[0].message.content
+                tokens_used = response.usage.total_tokens
 
-            return extracted_text, tokens_used
+                return extracted_text, tokens_used
+            except Exception as exc:
+                status_code = getattr(exc, "status_code", None)
+                response_status = getattr(getattr(exc, "response", None), "status_code", None)
+                retryable = False
+                for code in (status_code, response_status):
+                    if isinstance(code, int) and (code == 429 or 500 <= code < 600):
+                        retryable = True
+                        break
 
-        except Exception as exc:
-            logger.exception(
-                f"Failed to extract text from image (page {page_number})", exc_info=exc
-            )
-            return None, 0
+                if attempt >= self.max_retries or not retryable:
+                    logger.exception(
+                        "Failed to extract text from image (page %s)", page_number
+                    )
+                    return None, 0
+
+                logger.warning(
+                    "Vision API request failed (attempt %s/%s) for page %s: %s",
+                    attempt,
+                    self.max_retries,
+                    page_number,
+                    exc,
+                    exc_info=True,
+                )
+                time.sleep(delay)
+                delay = min(delay * 2, 10.0)
+
+        logger.error("Vision API request retries exhausted for page %s", page_number)
+        return None, 0
 
     def _process_single_page(
         self, pdf_path: Path, page_num: int, previous_context: str = ""
@@ -222,8 +241,8 @@ class VisionExtractor:
                 "tokens_used": tokens_used,
             }
             
-        except Exception as exc:
-            logger.exception(f"Failed to process page {page_number}", exc_info=exc)
+        except Exception:
+            logger.exception("Failed to process page %s", page_number)
             return {
                 "page_number": page_number,
                 "text": "",
@@ -266,10 +285,9 @@ class VisionExtractor:
                 try:
                     page_data = future.result()
                     page_results[page_num] = page_data
-                except Exception as exc:
+                except Exception:
                     logger.exception(
-                        f"Page {page_num + 1} processing raised an exception", 
-                        exc_info=exc
+                        "Page %s processing raised an exception", page_num + 1
                     )
                     page_results[page_num] = {
                         "page_number": page_num + 1,
@@ -348,8 +366,7 @@ class VisionExtractor:
 
         except Exception as exc:
             logger.exception(
-                f"Failed to extract text using Vision API from {pdf_path}",
-                exc_info=exc,
+                "Failed to extract text using Vision API from %s", pdf_path
             )
             return VisionExtractionResult(
                 success=False,
@@ -433,8 +450,10 @@ class VisionExtractor:
 
         except Exception as exc:
             logger.exception(
-                f"Failed to extract page range {start_page}-{end_page} using Vision API from {pdf_path}",
-                exc_info=exc,
+                "Failed to extract page range %s-%s using Vision API from %s",
+                start_page,
+                end_page,
+                pdf_path,
             )
             return VisionExtractionResult(
                 success=False,

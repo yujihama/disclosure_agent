@@ -93,21 +93,21 @@ class DocumentClassifier:
         logger.info(f"  - Final _openai_client: {self._openai_client is not None}")
 
     def classify(self, *, filename: str, text_sample: str) -> Optional[ClassificationResult]:
-        """Return the best classification for the provided content sample using LLM."""
-
-        if not self._openai_client:
-            logger.error("LLM-based classification requires OpenAI client to be configured")
-            return None
+        """Classify the document using templates with optional LLM refinement."""
 
         haystack = f"{filename} {text_sample}".lower()
+        template_result = self._classify_with_templates(haystack)
+
+        if not self._llm_enabled or not self._openai_client:
+            return template_result
 
         llm_result = self._classify_with_llm(
             filename=filename,
             text_sample=text_sample,
             haystack=haystack,
-            template_result=None,
+            template_result=template_result,
         )
-        return llm_result
+        return llm_result or template_result
 
     def get_display_name(self, document_type: str) -> str:
         return self._display_map.get(document_type, document_type)
@@ -199,7 +199,7 @@ class DocumentClassifier:
         try:
             response = self._invoke_openai(request_payload, response_format)
         except Exception as exc:  # pragma: no cover - network/SDK errors
-            logger.warning("OpenAI classification request failed: %s", exc, exc_info=exc)
+            logger.warning("OpenAI classification request failed: %s", exc, exc_info=True)
             return None
 
         raw = self._extract_output_text(response)
@@ -210,7 +210,7 @@ class DocumentClassifier:
         try:
             payload = json.loads(raw)
         except json.JSONDecodeError as exc:
-            logger.warning("Failed to parse OpenAI classification payload: %s", exc, exc_info=exc)
+            logger.warning("Failed to parse OpenAI classification payload: %s", exc, exc_info=True)
             return None
 
         document_type = payload.get("document_type")
@@ -318,7 +318,7 @@ class DocumentClassifier:
         try:
             return OpenAI(**client_kwargs)
         except Exception as exc:  # pragma: no cover - SDK init errors
-            logger.warning("Failed to initialise OpenAI client: %s", exc, exc_info=exc)
+            logger.warning("Failed to initialise OpenAI client: %s", exc, exc_info=True)
             return None
 
 
