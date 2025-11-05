@@ -174,7 +174,7 @@ class DocumentUploadManager:
                 with open(storage_path, "wb") as handle:
                     handle.write(payload)
             except OSError as exc:
-                logger.exception("Failed to persist uploaded PDF", exc_info=exc)
+                logger.exception("Failed to persist uploaded PDF: %s", exc)
                 errors.append("Unable to persist uploaded document. Please retry later.")
 
         status = "accepted" if not errors else "rejected"
@@ -230,7 +230,8 @@ class DocumentUploadManager:
         return processed
 
     def _is_pdf(self, content_type: Optional[str], payload: bytes) -> bool:
-        if content_type and content_type.lower() not in {"application/pdf", "application/x-pdf"}:
+        ctype = (content_type or "").lower()
+        if ctype and "pdf" not in ctype:
             return False
         return payload.startswith(PDF_SIGNATURE)
 
@@ -255,7 +256,7 @@ class DocumentUploadManager:
                     return full_text[:self._sample_bytes]
                 return full_text
         except Exception as exc:
-            logger.warning("Failed to extract text from PDF: %s", exc, exc_info=exc)
+            logger.warning("Failed to extract text from PDF: %s", exc)
             # フォールバック: バイト列から直接デコード試行
             sample = payload[: self._sample_bytes]
             try:
