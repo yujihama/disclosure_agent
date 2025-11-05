@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import sys
+import types
+from unittest.mock import Mock
+
 import pytest
-from unittest.mock import Mock, MagicMock, patch
 
 from app.services.comparison_engine import (
     ComparisonOrchestrator,
@@ -18,10 +21,19 @@ from app.services.comparison_engine import (
 def mock_settings():
     """モック設定"""
     settings = Mock()
-    settings.openai_api_key = "test-key"
+    settings.openai_api_key = ""
     settings.openai_model = "gpt-4"
     settings.openai_timeout_seconds = 30.0
     return settings
+
+
+@pytest.fixture(autouse=True)
+def stub_pydantic_settings():
+    """pydantic_settingsが未インストールの環境でもテストを実行できるようにスタブを登録"""
+
+    module = types.SimpleNamespace(BaseSettings=object, SettingsConfigDict=dict)
+    sys.modules.setdefault("pydantic_settings", module)
+    yield
 
 
 @pytest.fixture
@@ -357,4 +369,69 @@ def test_mapping_info_included_in_results(orchestrator, mock_openai_client):
     assert result[0].doc2_section_name == "企業情報"
     assert result[0].mapping_confidence == 1.0
     assert result[0].mapping_method == "exact"
+
+
+def test_reassess_importance_escalates_with_new_contradictions(orchestrator):
+    """追加探索で矛盾が増えた場合に重要度が引き上げられることを確認"""
+
+    additional_searches = [
+        {
+            "analysis": {
+                "additional_contradictions": ["矛盾A", "矛盾B"],
+            }
+        }
+    ]
+
+    importance, reason = orchestrator._reassess_importance(
+        initial_importance="medium",
+        initial_reason="初期判定",
+        additional_searches=additional_searches,
+    )
+
+    assert importance == "high"
+    assert "2件" in reason
+
+
+def test_reassess_importance_respects_importance_update(orchestrator):
+    """LLMの重要度更新提案が反映されることを確認"""
+
+    additional_searches = [
+        {
+            "analysis": {
+                "importance_update": "high",
+                "enhanced_understanding": "業績見通しに重大な差異が見つかりました。",
+            }
+        }
+    ]
+
+    importance, reason = orchestrator._reassess_importance(
+        initial_importance="medium",
+        initial_reason="",
+        additional_searches=additional_searches,
+    )
+
+    assert importance == "high"
+    assert "重大な差異" in reason
+
+
+def test_reassess_importance_downgrades_when_resolved(orchestrator):
+    """矛盾が解消された場合に重要度が引き下げられることを確認"""
+
+    additional_searches = [
+        {
+            "analysis": {
+                "importance_update": "medium",
+                "resolved_contradictions": ["矛盾が解消"],
+            }
+        }
+    ]
+
+    importance, reason = orchestrator._reassess_importance(
+        initial_importance="high",
+        initial_reason="矛盾が存在",
+        additional_searches=additional_searches,
+    )
+
+    assert importance == "medium"
+    assert "矛盾1件が解消されました" in reason
 
