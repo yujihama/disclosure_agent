@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import pymupdf  # PyMuPDF
 
@@ -19,7 +19,7 @@ class TextExtractionResult:
         success: bool,
         text: str = "",
         page_count: int = 0,
-        pages: Optional[list[dict[str, any]]] = None,
+        pages: Optional[list[dict[str, Any]]] = None,
         error: Optional[str] = None,
     ):
         self.success = success
@@ -109,7 +109,7 @@ class TextExtractor:
             )
 
         except Exception as exc:
-            logger.exception(f"Failed to extract text from {pdf_path}", exc_info=exc)
+            logger.exception("Failed to extract text from %s", pdf_path)
             return TextExtractionResult(
                 success=False,
                 error=f"Text extraction failed: {str(exc)}",
@@ -180,8 +180,10 @@ class TextExtractor:
 
         except Exception as exc:
             logger.exception(
-                f"Failed to extract page range {start_page}-{end_page} from {pdf_path}",
-                exc_info=exc,
+                "Failed to extract page range %s-%s from %s",
+                start_page,
+                end_page,
+                pdf_path,
             )
             return TextExtractionResult(
                 success=False,
