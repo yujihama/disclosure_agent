@@ -168,7 +168,7 @@ class SectionContentExtractor:
         section_tables = []
         
         for table in all_tables:
-            table_page = table.get("page", 0)
+            table_page = table.get("page_number", table.get("page", 0))
             if table_page in pages:
                 section_tables.append(table)
         
@@ -260,8 +260,9 @@ class SectionContentExtractor:
             preview_rows = data[:5]
             preview = "\n".join([" | ".join(str(cell) for cell in row) for row in preview_rows])
             
+            page_display = table.get("page_number", table.get("page", "?"))
             summaries.append(
-                f"テーブル{i+1} (ページ{table.get('page', '?')}): "
+                f"テーブル{i+1} (ページ{page_display}): "
                 f"{row_count}行 x {col_count}列\n{preview}"
             )
             
