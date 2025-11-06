@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 from ..core.config import get_settings
+from ..core.openai_client import create_openai_client
 from ..services.metadata_store import DocumentMetadataStore
 from ..services.structuring import TableExtractor, TextExtractor, VisionExtractor
+from ..services.structuring.vision_extractor import VisionExtractionResult
 from ..services.structuring.section_detector import SectionDetector
 from .celery_app import celery_app
 
@@ -131,18 +133,23 @@ def structure_document_task(document_id: str) -> dict[str, Any]:
         }
         
         # ステップ2: テキスト抽出が不十分な場合、Vision APIでフォールバック
-        if not text_result.success:
+        if not text_result.success and settings.openai_api_key:
             logger.info(f"Text extraction insufficient for {document_id}, falling back to Vision API")
             metadata_store.update_processing_status(document_id, status="extracting_vision")
-            
-            vision_extractor = VisionExtractor(
-                api_key=settings.openai_api_key,
-                model=settings.openai_model,
-                batch_size=10,  # 10ページずつバッチ並列処理
-                max_workers=10,  # 最大10スレッド並列実行
-            )
-            vision_result = vision_extractor.extract(pdf_path)
-            
+
+            vision_client = create_openai_client(settings)
+            if vision_client is None:
+                logger.warning("Vision API を使用できないため、Vision抽出をスキップします")
+                vision_result = VisionExtractionResult(success=False, error="openai_client_unavailable")
+            else:
+                vision_extractor = VisionExtractor(
+                    client=vision_client,
+                    model=settings.openai_model,
+                    batch_size=10,  # 10ページずつバッチ並列処理
+                    max_workers=10,  # 最大10スレッド並列実行
+                )
+                vision_result = vision_extractor.extract(pdf_path)
+
             if vision_result.success:
                 full_text = vision_result.text
                 extraction_method = "vision"
@@ -159,38 +166,59 @@ def structure_document_task(document_id: str) -> dict[str, Any]:
                     "error": vision_result.error,
                 }
         
+        elif not text_result.success:
+            logger.info(
+                f"Skipping Vision extraction for {document_id}: OpenAI API key not configured"
+            )
+
         # ステップ3: テーブル抽出
         metadata_store.update_processing_status(document_id, status="extracting_tables")
         table_extractor = TableExtractor()
         table_result = table_extractor.extract(pdf_path)
-        
+
         extraction_metadata["table_extraction"] = {
             "success": table_result.success,
             "table_count": table_result.table_count,
             "page_count": table_result.page_count,
             "error": table_result.error,
         }
-        
+
         # ステップ4: 構造化データを保存
         structured_data = {
             "full_text": full_text,
             "pages": text_result.pages if text_result.success else [],
             "tables": table_result.tables if table_result.success else [],
         }
-        
+
         # ステップ4.5: セクション検出（書類種別が判明している場合）
         document_type = metadata.manual_type or metadata.detected_type
+
         if document_type and settings.openai_api_key and text_result.success:
             try:
                 logger.info(f"Starting section detection for {document_id} (type: {document_type})")
                 metadata_store.update_processing_status(document_id, status="detecting_sections")
-                
-                from openai import OpenAI
-                openai_client = OpenAI(
-                    api_key=settings.openai_api_key,
-                    timeout=settings.openai_timeout_seconds,
-                )
-                
+
+                openai_client = create_openai_client(settings)
+                if openai_client is None:
+                    logger.info(
+                        f"Skipping section detection for {document_id}: OpenAI クライアントを初期化できませんでした"
+                    )
+                    extraction_metadata["section_detection"] = {"success": False, "error": "openai_client_unavailable"}
+                    metadata_store.save_structured_data(
+                        document_id,
+                        structured_data=structured_data,
+                        extraction_method=extraction_method,
+                        extraction_metadata=extraction_metadata,
+                    )
+                    metadata_store.update_processing_status(document_id, status="structured")
+                    return {
+                        "document_id": document_id,
+                        "status": "structured",
+                        "method": extraction_method,
+                        "metadata": extraction_metadata,
+                        "structured_data": structured_data,
+                    }
+
                 detector = SectionDetector(
                     openai_client=openai_client,
                     document_type=document_type,
