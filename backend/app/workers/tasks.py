@@ -204,6 +204,12 @@ def structure_document_task(document_id: str) -> dict[str, Any]:
                         f"Skipping section detection for {document_id}: OpenAI クライアントを初期化できませんでした"
                     )
                     extraction_metadata["section_detection"] = {"success": False, "error": "openai_client_unavailable"}
+                    metadata_store.save_structured_data(
+                        document_id,
+                        structured_data=structured_data,
+                        extraction_method=extraction_method,
+                        extraction_metadata=extraction_metadata,
+                    )
                     metadata_store.update_processing_status(document_id, status="structured")
                     return {
                         "document_id": document_id,
