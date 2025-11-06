@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -15,6 +16,9 @@ class Settings(BaseSettings):
     openai_timeout_seconds: float = 120.0
     # 比較処理用のタイムアウト（環境変数で設定可能、Noneで無効化）
     openai_comparison_timeout_seconds: float | None = None
+    openai_provider: Literal["openai", "azure"] = "openai"
+    azure_openai_endpoint: str | None = None
+    azure_openai_api_version: str | None = None
     # セクション情報抽出用のモデル（環境変数で設定可能）
     openai_section_extraction_model: str | None = None
     # リトライ時のフォールバックモデル（環境変数で設定可能）
@@ -51,6 +55,12 @@ class Settings(BaseSettings):
     def retry_model(self) -> str:
         """リトライ時のフォールバックモデルを返す（未設定の場合はデフォルトモデル）"""
         return self.openai_retry_model or self.openai_model
+
+    @property
+    def use_azure_openai(self) -> bool:
+        """Azure OpenAI を利用するかどうかを判定"""
+
+        return self.openai_provider.lower() == "azure"
     
     def get_section_extraction_config(self) -> dict[str, int | float]:
         """セクション情報抽出の設定を取得"""

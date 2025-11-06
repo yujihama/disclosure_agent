@@ -16,6 +16,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Literal, Optional
 
+from ..core.config import get_settings
+from ..core.openai_client import create_openai_client
+
 logger = logging.getLogger(__name__)
 
 
@@ -129,20 +132,15 @@ class ComparisonOrchestrator:
     """
     
     def __init__(self, settings=None, max_workers: int = 5):
-        from ..core.config import get_settings
         self.settings = settings or get_settings()
         self.max_workers = max_workers  # セクション分析の並列数
         
         # OpenAI クライアント初期化
         # 比較処理用のタイムアウトが設定されている場合はそれを使用、なければタイムアウトなし
         if self.settings.openai_api_key:
-            from openai import OpenAI
+            # 比較処理用のタイムアウトを使用（Noneの場合はデフォルトタイムアウトを使用）
             timeout = self.settings.openai_comparison_timeout_seconds
-            # Noneの場合はタイムアウトを無効化（比較処理は長時間かかるため）
-            client_kwargs = {"api_key": self.settings.openai_api_key}
-            if timeout is not None:
-                client_kwargs["timeout"] = timeout
-            self.openai_client = OpenAI(**client_kwargs)
+            self.openai_client = create_openai_client(self.settings, timeout=timeout)
         else:
             self.openai_client = None
     

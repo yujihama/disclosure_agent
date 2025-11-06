@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from ..core.config import Settings, get_settings
+from ..core.openai_client import create_openai_client
 from .templates import list_templates
 
 logger = logging.getLogger(__name__)
@@ -306,24 +307,7 @@ class DocumentClassifier:
         return ""
 
     def _build_openai_client(self) -> Any | None:
-        try:
-            from openai import OpenAI
-        except ImportError:  # pragma: no cover - optional dependency guard
-            logger.warning("OpenAI SDK not available; document classification will use templates only.")
-            return None
-
-        client_kwargs: Dict[str, Any] = {}
-        if self._settings.openai_api_key:
-            client_kwargs["api_key"] = self._settings.openai_api_key
-        timeout = float(self._settings.openai_timeout_seconds or 0)
-        if timeout > 0:
-            client_kwargs["timeout"] = timeout
-
-        try:
-            return OpenAI(**client_kwargs)
-        except Exception as exc:  # pragma: no cover - SDK init errors
-            logger.warning("Failed to initialise OpenAI client: %s", exc, exc_info=exc)
-            return None
+        return create_openai_client(self._settings)
 
 
 def get_document_classifier(settings: Optional[Settings] = None) -> DocumentClassifier:
