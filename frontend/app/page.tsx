@@ -9,6 +9,75 @@ import { DOCUMENT_TYPE_OPTIONS, findDocumentLabel } from "@/lib/document-types";
 import { MAX_UPLOAD_FILES, MAX_UPLOAD_SIZE_MB } from "@/lib/config";
 import type { DocumentUploadResult, DocumentUploadResponse } from "@/lib/types";
 
+const sanitizeFilenameComponent = (value: string) => {
+  const replaced = value.replace(/[\\/:*?"<>|]/g, "_").trim();
+  return replaced.length > 0 ? replaced : "export";
+};
+
+const removeFileExtension = (filename: string) => {
+  const lastDotIndex = filename.lastIndexOf(".");
+  if (lastDotIndex <= 0) {
+    return filename;
+  }
+  return filename.slice(0, lastDotIndex);
+};
+
+const createCsvFilename = (baseName: string, suffix: string) => {
+  const sanitizedBase = sanitizeFilenameComponent(baseName);
+  const sanitizedSuffix = sanitizeFilenameComponent(suffix);
+  return `${sanitizedBase}_${sanitizedSuffix}.csv`;
+};
+
+const csvValueToString = (value: unknown): string => {
+  if (value == null) {
+    return "";
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  try {
+    return JSON.stringify(value);
+  } catch (error) {
+    console.warn("CSV変換中にJSONシリアライズに失敗しました", error);
+    return String(value);
+  }
+};
+
+const escapeCsvValue = (value: unknown) => {
+  const str = csvValueToString(value);
+  if (/[",\n\r]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+};
+
+const createCsvContent = (headers: string[], rows: Array<Array<unknown>>) => {
+  const headerLine = headers.map(escapeCsvValue).join(",");
+  const dataLines = rows.map((row) => row.map(escapeCsvValue).join(","));
+  return [headerLine, ...dataLines].join("\r\n");
+};
+
+const downloadCsvFile = (filename: string, csv: string) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
 const AUTO_OPTION_VALUE = "__auto__";
 
 // 構造化データ表示コンポーネント
@@ -25,11 +94,67 @@ function StructuredDataDisplay({ document }: { document: DocumentUploadResult })
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
-  if (!document.structured_data) return null;
-
   const sd = document.structured_data;
-  const pages = sd.pages || [];
-  const tables = sd.tables || [];
+  const pages = sd?.pages || [];
+  const tables = sd?.tables || [];
+  const sectionEntries = useMemo<[string, any][]>(() => {
+    if (!sd || typeof sd !== "object") {
+      return [];
+    }
+    const rawSections = (sd as any).sections;
+    if (!rawSections || typeof rawSections !== "object") {
+      return [];
+    }
+    return Object.entries(rawSections) as [string, any][];
+  }, [sd]);
+  const hasSections = sectionEntries.length > 0;
+
+  const handleDownloadSectionsCsv = useCallback(() => {
+    if (!hasSections) {
+      return;
+    }
+
+    const headers = [
+      "section_name",
+      "start_page",
+      "end_page",
+      "char_count",
+      "confidence_pct",
+      "summary",
+      "extracted_content",
+    ];
+
+    const rows = sectionEntries.map(([sectionName, sectionInfo]) => {
+      const startPage = sectionInfo?.start_page ?? "";
+      const endPage = sectionInfo?.end_page ?? "";
+      const charCount = sectionInfo?.char_count ?? "";
+      const confidence =
+        typeof sectionInfo?.confidence === "number" && Number.isFinite(sectionInfo.confidence)
+          ? (sectionInfo.confidence * 100).toFixed(1)
+          : "";
+      const summary = sectionInfo?.summary ?? sectionInfo?.extracted_content?.summary ?? "";
+      const extractedContent =
+        sectionInfo?.extracted_content && Object.keys(sectionInfo.extracted_content).length > 0
+          ? sectionInfo.extracted_content
+          : "";
+
+      return [
+        sectionName,
+        startPage,
+        endPage,
+        charCount,
+        confidence,
+        summary,
+        extractedContent,
+      ];
+    });
+
+    const baseName = removeFileExtension(document.filename);
+    const csv = createCsvContent(headers, rows);
+    downloadCsvFile(createCsvFilename(baseName, "sections"), csv);
+  }, [document.filename, hasSections, sectionEntries]);
+
+  if (!sd) return null;
 
   return (
     <div className="mt-4 space-y-2">
@@ -97,14 +222,24 @@ function StructuredDataDisplay({ document }: { document: DocumentUploadResult })
       )}
 
       {/* セクション検出結果 */}
-      {(sd as any).sections && Object.keys((sd as any).sections).length > 0 && (
+      {hasSections && (
         <details className="rounded-lg border border-white/20 bg-white/5">
           <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-white hover:bg-white/5">
-            Detected Sections ({Object.keys((sd as any).sections).length})
+            Detected Sections ({sectionEntries.length})
           </summary>
           <div className="max-h-96 overflow-y-auto border-t border-white/10 px-4 py-3">
+            <div className="mb-3 flex justify-end">
+              <button
+                type="button"
+                onClick={handleDownloadSectionsCsv}
+                className="rounded-md border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={!hasSections}
+              >
+                CSVダウンロード
+              </button>
+            </div>
             <div className="space-y-3">
-              {Object.entries((sd as any).sections).map(([sectionName, sectionInfo]: [string, any]) => (
+              {sectionEntries.map(([sectionName, sectionInfo]) => (
                 <details key={sectionName} className="rounded border border-white/10 bg-white/5">
                   <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-white/90 hover:bg-white/10">
                     {sectionName}
@@ -332,6 +467,12 @@ export default function HomePage() {
   const [comparisonStatus, setComparisonStatus] = useState<string>("");
   const [currentSection, setCurrentSection] = useState<string>("");
   const [sectionProgress, setSectionProgress] = useState<{completed: number, total: number} | null>(null);
+  const comparisonCsvAvailable = useMemo(
+    () =>
+      Array.isArray(comparisonResult?.section_detailed_comparisons) &&
+      comparisonResult.section_detailed_comparisons.length > 0,
+    [comparisonResult],
+  );
   
   // 比較結果フィルタリング用のstate
   const [importanceFilter, setImportanceFilter] = useState<"all" | "high" | "medium" | "low">("all");
@@ -377,6 +518,104 @@ export default function HomePage() {
     setCurrentSection("");
     setSectionProgress(null);
   }, []);
+
+  const handleDownloadComparisonCsv = useCallback(() => {
+    if (!comparisonResult || !comparisonCsvAvailable) {
+      return;
+    }
+
+    const details: any[] = comparisonResult.section_detailed_comparisons ?? [];
+    const headers = [
+      "comparison_id",
+      "created_at",
+      "mode",
+      "priority",
+      "doc1_filename",
+      "doc1_company",
+      "doc1_fiscal_year",
+      "doc2_filename",
+      "doc2_company",
+      "doc2_fiscal_year",
+      "section_name",
+      "doc1_section_name",
+      "doc1_page_range",
+      "doc2_section_name",
+      "doc2_page_range",
+      "importance",
+      "importance_reason",
+      "summary",
+      "mapping_method",
+      "mapping_confidence_pct",
+      "text_changes",
+      "numerical_changes",
+      "tone_analysis",
+      "has_additional_context",
+      "additional_searches",
+    ];
+
+    const rows = details.map((detail: any) => {
+      const mappingConfidence =
+        typeof detail?.mapping_confidence === "number" && Number.isFinite(detail.mapping_confidence)
+          ? (detail.mapping_confidence * 100).toFixed(1)
+          : "";
+      const textChanges =
+        detail?.text_changes && Object.keys(detail.text_changes).length > 0 ? detail.text_changes : "";
+      const numericalChanges =
+        Array.isArray(detail?.numerical_changes) && detail.numerical_changes.length > 0 ? detail.numerical_changes : "";
+      const toneAnalysis =
+        detail?.tone_analysis && Object.keys(detail.tone_analysis).length > 0 ? detail.tone_analysis : "";
+      const additionalSearches =
+        Array.isArray(detail?.additional_searches) && detail.additional_searches.length > 0
+          ? detail.additional_searches
+          : "";
+
+      return [
+        comparisonResult.comparison_id ?? "",
+        comparisonResult.created_at ?? "",
+        comparisonResult.mode ?? "",
+        comparisonResult.priority ?? "",
+        comparisonResult.doc1_info?.filename ?? comparisonResult.doc1_info?.document_id ?? "",
+        comparisonResult.doc1_info?.company_name ?? "",
+        comparisonResult.doc1_info?.fiscal_year ?? "",
+        comparisonResult.doc2_info?.filename ?? comparisonResult.doc2_info?.document_id ?? "",
+        comparisonResult.doc2_info?.company_name ?? "",
+        comparisonResult.doc2_info?.fiscal_year ?? "",
+        detail?.section_name ?? "",
+        detail?.doc1_section_name ?? detail?.section_name ?? "",
+        detail?.doc1_page_range ?? "",
+        detail?.doc2_section_name ?? detail?.section_name ?? "",
+        detail?.doc2_page_range ?? "",
+        detail?.importance ?? "",
+        detail?.importance_reason ?? "",
+        detail?.summary ?? "",
+        detail?.mapping_method ?? "",
+        mappingConfidence,
+        textChanges,
+        numericalChanges,
+        toneAnalysis,
+        detail?.has_additional_context ? "true" : "false",
+        additionalSearches,
+      ];
+    });
+
+    if (rows.length === 0) {
+      return;
+    }
+
+    const doc1Identifier = String(
+      comparisonResult.doc1_info?.filename ?? comparisonResult.doc1_info?.document_id ?? "document1",
+    );
+    const doc2Identifier = String(
+      comparisonResult.doc2_info?.filename ?? comparisonResult.doc2_info?.document_id ?? "document2",
+    );
+    const baseName = `${removeFileExtension(doc1Identifier)}_vs_${removeFileExtension(doc2Identifier)}`;
+    const suffixParts = [comparisonResult.comparison_id, comparisonResult.mode, "comparison"].filter(
+      (part): part is string => Boolean(part),
+    );
+    const suffix = suffixParts.length > 0 ? suffixParts.join("_") : "comparison";
+    const csv = createCsvContent(headers, rows);
+    downloadCsvFile(createCsvFilename(baseName, suffix), csv);
+  }, [comparisonCsvAvailable, comparisonResult]);
 
   // ドキュメント一覧を読み込む
   const loadDocuments = useCallback(async () => {
@@ -558,7 +797,7 @@ export default function HomePage() {
 
       setErrorMessage(messages.length > 0 ? messages.join("\n") : null);
     },
-    [limits.max_file_size_mb, limits.max_files, maxBytes],
+    [limits.max_files, maxBytes],
   );
 
   const handleDrop = useCallback(
@@ -1195,6 +1434,14 @@ export default function HomePage() {
           <div className="flex items-center justify-between border-b border-white/10 pb-4">
             <h2 className="text-2xl font-semibold text-white">比較結果</h2>
             <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleDownloadComparisonCsv}
+                disabled={!comparisonCsvAvailable}
+                className="rounded-md border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium text-white transition-colors hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                CSVダウンロード
+              </button>
               {/* <button
                 type="button"
                 onClick={() => setActiveTab("documents")}
