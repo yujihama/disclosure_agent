@@ -11,8 +11,10 @@ import time
 from typing import Any, Optional
 
 import pymupdf  # PyMuPDF for rendering pages
-from openai import OpenAI
 from PIL import Image
+
+from ...core.config import Settings
+from ...core.openai_client import create_openai_client
 
 logger = logging.getLogger(__name__)
 
@@ -53,12 +55,15 @@ class VisionExtractor:
 
     def __init__(
         self,
-        api_key: str,
+        api_key: str | None = None,
         model: str = "gpt-5",
         image_resolution: int = 150,
         max_retries: int = 3,
         batch_size: int = 10,
         max_workers: int = 10,
+        *,
+        client: Any | None = None,
+        settings: Settings | None = None,
     ):
         """
         Initialize vision extractor.
@@ -71,7 +76,15 @@ class VisionExtractor:
             batch_size: Number of pages to process in parallel
             max_workers: Maximum number of parallel workers
         """
-        self.client = OpenAI(api_key=api_key)
+        if client is not None:
+            self.client = client
+        else:
+            resolved_settings = settings or Settings(openai_api_key=api_key)
+            resolved_client = create_openai_client(resolved_settings, api_key=api_key)
+            if resolved_client is None:
+                raise ValueError("OpenAIクライアントを初期化できませんでした。設定を確認してください。")
+
+            self.client = resolved_client
         self.model = model
         self.image_resolution = image_resolution
         self.max_retries = max_retries

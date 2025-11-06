@@ -16,6 +16,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Literal, Optional
 
+from ..core.config import get_settings
+from ..core.openai_client import create_openai_client
+
 logger = logging.getLogger(__name__)
 
 
@@ -129,17 +132,12 @@ class ComparisonOrchestrator:
     """
     
     def __init__(self, settings=None, max_workers: int = 5):
-        from ..core.config import get_settings
         self.settings = settings or get_settings()
         self.max_workers = max_workers  # セクション分析の並列数
         
         # OpenAI クライアント初期化
         if self.settings.openai_api_key:
-            from openai import OpenAI
-            self.openai_client = OpenAI(
-                api_key=self.settings.openai_api_key,
-                timeout=self.settings.openai_timeout_seconds,
-            )
+            self.openai_client = create_openai_client(self.settings)
         else:
             self.openai_client = None
     

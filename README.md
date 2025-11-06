@@ -74,6 +74,10 @@ cd disclosure_agent
 @"
 APP_OPENAI_API_KEY=your-openai-api-key-here
 APP_OPENAI_MODEL=gpt-5
+# Azure OpenAI を利用する場合は以下も設定
+# APP_OPENAI_PROVIDER=azure
+# APP_AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+# APP_AZURE_OPENAI_API_VERSION=2024-02-15-preview
 "@ | Out-File -FilePath .env -Encoding utf8
 
 # 3. すべてのサービスを起動（初回はビルドに数分かかります）
@@ -113,6 +117,10 @@ cd disclosure_agent
 @"
 APP_OPENAI_API_KEY=your-openai-api-key-here
 APP_OPENAI_MODEL=gpt-5
+# Azure OpenAI を利用する場合は以下も設定
+# APP_OPENAI_PROVIDER=azure
+# APP_AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+# APP_AZURE_OPENAI_API_VERSION=2024-02-15-preview
 APP_REDIS_URL=redis://localhost:6379/0
 APP_CELERY_BROKER_URL=redis://localhost:6379/0
 APP_CELERY_RESULT_BACKEND=redis://localhost:6379/0
@@ -161,6 +169,10 @@ npm run dev
 APP_OPENAI_API_KEY=your-openai-api-key-here
 APP_OPENAI_MODEL=gpt-5
 APP_OPENAI_TIMEOUT_SECONDS=30.0
+# Azure OpenAI を利用する場合
+# APP_OPENAI_PROVIDER=azure
+# APP_AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+# APP_AZURE_OPENAI_API_VERSION=2024-02-15-preview
 
 # Redis/Celery設定（Dockerを使用する場合）
 APP_REDIS_URL=redis://redis:6379/0
@@ -200,6 +212,10 @@ NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB=50
 APP_OPENAI_API_KEY=your-openai-api-key-here
 APP_OPENAI_MODEL=gpt-5
 APP_OPENAI_TIMEOUT_SECONDS=30.0
+# Azure OpenAI を利用する場合
+# APP_OPENAI_PROVIDER=azure
+# APP_AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+# APP_AZURE_OPENAI_API_VERSION=2024-02-15-preview
 
 # Redis/Celery設定（Docker使用時）
 APP_REDIS_URL=redis://redis:6379/0
