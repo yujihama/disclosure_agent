@@ -10,8 +10,11 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Python lib directories (root only)
+/lib/
 lib64/
+# Explicitly include frontend/lib
+!frontend/lib/
 parts/
 sdist/
 var/
