@@ -473,13 +473,13 @@ export default function HomePage() {
       const comparisonId = task.comparison_id;
       
       // Step 2: ポーリングでステータスを確認
-      const pollInterval = 1000; // 1秒ごと
-      const maxAttempts = 300; // 最大5分
+      const pollInterval = 2000; // 2秒ごと（サーバー負荷軽減のため）
+      const maxAttempts = 1200; // 最大40分（2400秒 = 40分、初回のセクション抽出と詳細分析に対応）
       let attempts = 0;
       
       const poll = async (): Promise<void> => {
         if (attempts >= maxAttempts) {
-          throw new Error("タイムアウト: 比較処理に時間がかかりすぎています。");
+          throw new Error("タイムアウト: 比較処理に時間がかかりすぎています（40分以上）。処理はバックグラウンドで継続中です。しばらく待ってから比較履歴を確認してください。");
         }
         
         attempts++;
@@ -1577,7 +1577,11 @@ export default function HomePage() {
                         </div>
                         
                         {/* サマリー */}
-                        <div className="mb-4 rounded-md border border-white/10 bg-white/5 p-3">
+                        <div className={`mb-4 rounded-md border p-3 ${
+                          detail.summary?.includes('失敗') || detail.importance_reason?.includes('失敗') 
+                            ? 'border-red-500/30 bg-red-500/10' 
+                            : 'border-white/10 bg-white/5'
+                        }`}>
                           <p className="text-sm leading-relaxed text-white/90">
                             {detail.summary}
                           </p>

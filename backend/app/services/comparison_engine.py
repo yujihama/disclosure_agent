@@ -134,12 +134,15 @@ class ComparisonOrchestrator:
         self.max_workers = max_workers  # セクション分析の並列数
         
         # OpenAI クライアント初期化
+        # 比較処理用のタイムアウトが設定されている場合はそれを使用、なければタイムアウトなし
         if self.settings.openai_api_key:
             from openai import OpenAI
-            self.openai_client = OpenAI(
-                api_key=self.settings.openai_api_key,
-                timeout=self.settings.openai_timeout_seconds,
-            )
+            timeout = self.settings.openai_comparison_timeout_seconds
+            # Noneの場合はタイムアウトを無効化（比較処理は長時間かかるため）
+            client_kwargs = {"api_key": self.settings.openai_api_key}
+            if timeout is not None:
+                client_kwargs["timeout"] = timeout
+            self.openai_client = OpenAI(**client_kwargs)
         else:
             self.openai_client = None
     
@@ -1580,6 +1583,11 @@ JSON形式で以下のフォーマットで回答してください：
                 comparison_mode=comparison_mode,
             )
             
+            # initial_analysis_resultがNoneの場合のガード
+            if initial_analysis_result is None:
+                logger.error(f"initial_analysis_result が None です ({mapping.doc1_section})")
+                return None
+            
             # 結果をSectionDetailedComparisonに変換
             # CONSISTENCY_CHECKモードの場合、LLMレスポンスの構造化データをtext_changesに統合
             text_changes = initial_analysis_result.get("text_changes", {})
@@ -1609,20 +1617,14 @@ JSON形式で以下のフォーマットで回答してください：
             )
             
             # ===== 追加探索の判断と実行 =====
-            # LLMが複数のキー名で返す可能性があるため、フォールバック処理
-            additional_search_info = (
-                initial_analysis_result.get("additional_exploration") or
-                initial_analysis_result.get("additional_investigation") or
-                initial_analysis_result.get("additional_search") or
-                {}
-            )
+            additional_search_info = initial_analysis_result.get("additional_search", {})
             
             # デバッグ: LLMレスポンスの内容を確認
             logger.info(f"=== セクション {mapping.doc1_section}: LLMレスポンス詳細 ===")
             logger.info(f"  initial_analysis_result keys: {list(initial_analysis_result.keys())}")
             logger.info(f"  additional_search_info: {additional_search_info}")
             
-            llm_search_needed = additional_search_info.get("needed") or additional_search_info.get("need") or False
+            llm_search_needed = additional_search_info.get("needed", False)
             llm_reason = additional_search_info.get("reason", "理由なし")
             search_phrases = additional_search_info.get("search_phrases", [])
             expected_findings = additional_search_info.get("expected_findings", "")
@@ -2140,7 +2142,7 @@ JSON形式で以下のように回答してください：
   "summary": "このセクションの差異の要約",
   
   "additional_search": {{
-    "needed": true/false,  # ← 必ず "needed" というキー名を使用（"need" ではありません）
+    "needed": true/false,
     "reason": "追加探索が必要/不要な理由",
     "search_phrases": [
       "検索フレーズ1（具体的なキーワードやトピック）",
@@ -2150,11 +2152,6 @@ JSON形式で以下のように回答してください：
     "expected_findings": "これらのフレーズで何を見つけることを期待しているか"
   }}
 }}
-
-**【重要なキー名の指定】**
-- `additional_search` というキーを必ず使用（`additional_exploration` や `additional_investigation` ではない）
-- その中の `needed` というキーを必ず使用（`need` ではない）
-- `search_phrases` というキーを必ず使用（`phrases` や `keywords` ではない）
 
 注意：
 - additional_search.neededがfalseの場合、search_phrasesは空配列で構いません
@@ -2320,7 +2317,7 @@ B. **検索フレーズの生成**
         # 出力形式にadditional_searchを追加
         output_section = """
   "additional_search": {{
-    "needed": true/false,  # ← 必ず "needed" というキー名を使用（"need" ではありません）
+    "needed": true/false,
     "reason": "追加探索が必要/不要な理由（矛盾の解決、背景の理解など）",
     "search_phrases": [
       "検索フレーズ1（矛盾に関連するキーワード）",
@@ -2329,11 +2326,6 @@ B. **検索フレーズの生成**
     ],
     "expected_findings": "これらのフレーズで何を見つけることを期待しているか"
   }}
-
-**【重要なキー名の指定】**
-- `additional_search` というキーを必ず使用（`additional_exploration` や `additional_investigation` ではない）
-- その中の `needed` というキーを必ず使用（`need` ではない）
-- `search_phrases` というキーを必ず使用（`phrases` や `keywords` ではない）
 """
         
         # 既存の出力形式の最後に追加
@@ -2395,7 +2387,7 @@ B. **検索フレーズの生成**
         
         output_section = """
   "additional_search": {{
-    "needed": true/false,  # ← 必ず "needed" というキー名を使用（"need" ではありません）
+    "needed": true/false,
     "reason": "追加探索が必要/不要な理由",
     "search_phrases": [
       "検索フレーズ1（差異の背景に関するキーワード）",
@@ -2404,11 +2396,6 @@ B. **検索フレーズの生成**
     ],
     "expected_findings": "これらのフレーズで何を見つけることを期待しているか"
   }}
-
-**【重要なキー名の指定】**
-- `additional_search` というキーを必ず使用（`additional_exploration` や `additional_investigation` ではない）
-- その中の `needed` というキーを必ず使用（`need` ではない）
-- `search_phrases` というキーを必ず使用（`phrases` や `keywords` ではない）
 """
         
         prompt = base_prompt.replace(
@@ -2672,14 +2659,14 @@ B. **検索フレーズの生成**
                     for ts in time_series[:5]  # 最大5年分
                 ])
                 sections.append(f"- {indicator} ({unit}): {time_series_str}")
-                stated_metrics = kpi.get('stated_metrics', {})
+                stated_metrics = kpi.get('stated_metrics', {}) or {}
                 if stated_metrics:
                     if stated_metrics.get('cagr_stated'):
                         sections.append(f"  CAGR: {stated_metrics.get('cagr_stated')}")
                     if stated_metrics.get('trend_stated'):
                         sections.append(f"  トレンド: {stated_metrics.get('trend_stated')}")
-                target_stated = kpi.get('target_stated', {})
-                if target_stated.get('target_description'):
+                target_stated = kpi.get('target_stated', {}) or {}
+                if target_stated and target_stated.get('target_description'):
                     sections.append(f"  目標: {target_stated.get('target_description')}")
         
         # 論理関係
@@ -2845,7 +2832,7 @@ B. **検索フレーズの生成**
         
         output_section = """
   "additional_search": {{
-    "needed": true/false,  # ← 必ず "needed" というキー名を使用（"need" ではありません）
+    "needed": true/false,
     "reason": "追加探索が必要/不要な理由",
     "search_phrases": [
       "検索フレーズ1（差異の背景に関するキーワード）",
@@ -2854,11 +2841,6 @@ B. **検索フレーズの生成**
     ],
     "expected_findings": "これらのフレーズで何を見つけることを期待しているか"
   }}
-
-**【重要なキー名の指定】**
-- `additional_search` というキーを必ず使用（`additional_exploration` や `additional_investigation` ではない）
-- その中の `needed` というキーを必ず使用（`need` ではない）
-- `search_phrases` というキーを必ず使用（`phrases` や `keywords` ではない）
 """
         
         prompt = base_prompt.replace(
@@ -2993,7 +2975,7 @@ B. **検索フレーズの生成**
         
         output_section = """
   "additional_search": {{
-    "needed": true/false,  # ← 必ず "needed" というキー名を使用（"need" ではありません）
+    "needed": true/false,
     "reason": "追加探索が必要/不要な理由",
     "search_phrases": [
       "検索フレーズ1（具体的なキーワードやトピック）",
@@ -3002,11 +2984,6 @@ B. **検索フレーズの生成**
     ],
     "expected_findings": "これらのフレーズで何を見つけることを期待しているか"
   }}
-
-**【重要なキー名の指定】**
-- `additional_search` というキーを必ず使用（`additional_exploration` や `additional_investigation` ではない）
-- その中の `needed` というキーを必ず使用（`need` ではない）
-- `search_phrases` というキーを必ず使用（`phrases` や `keywords` ではない）
 """
         
         prompt = base_prompt.replace(
@@ -3165,7 +3142,7 @@ B. **検索フレーズの生成**
         
         output_section = """
   "additional_search": {{
-    "needed": true/false,  # ← 必ず "needed" というキー名を使用（"need" ではありません）
+    "needed": true/false,
     "reason": "追加探索が必要/不要な理由（矛盾の解決、背景の理解など）",
     "search_phrases": [
       "検索フレーズ1（矛盾に関連するキーワード）",
@@ -3174,11 +3151,6 @@ B. **検索フレーズの生成**
     ],
     "expected_findings": "これらのフレーズで何を見つけることを期待しているか"
   }}
-
-**【重要なキー名の指定】**
-- `additional_search` というキーを必ず使用（`additional_exploration` や `additional_investigation` ではない）
-- その中の `needed` というキーを必ず使用（`need` ではない）
-- `search_phrases` というキーを必ず使用（`phrases` や `keywords` ではない）
 """
         
         # "summary"の行の後にadditional_searchを挿入
@@ -3304,7 +3276,45 @@ B. **検索フレーズの生成**
                 response_format={"type": "json_object"}
             )
             
-            result = json.loads(response.choices[0].message.content)
+            # レスポンスのコンテンツを取得
+            content = response.choices[0].message.content
+            if not content:
+                logger.warning(f"LLMが空のレスポンスを返しました ({section_name})")
+                return {
+                    "text_changes": {},
+                    "numerical_changes": [],
+                    "tone_analysis": {},
+                    "importance": "low",
+                    "importance_reason": "LLMレスポンスが空",
+                    "summary": "分析結果が取得できませんでした（空のレスポンス）",
+                    "additional_search": {
+                        "needed": False,
+                        "reason": "LLMレスポンス不正",
+                        "search_phrases": [],
+                        "expected_findings": ""
+                    }
+                }
+            
+            result = json.loads(content)
+            
+            # LLMがnullを返した場合の対処
+            if result is None:
+                logger.warning(f"LLMがnullを返しました ({section_name})")
+                return {
+                    "text_changes": {},
+                    "numerical_changes": [],
+                    "tone_analysis": {},
+                    "importance": "low",
+                    "importance_reason": "LLMレスポンスがnull",
+                    "summary": "分析結果が取得できませんでした",
+                    "additional_search": {
+                        "needed": False,
+                        "reason": "LLMレスポンス不正",
+                        "search_phrases": [],
+                        "expected_findings": ""
+                    }
+                }
+            
             return result
             
         except Exception as exc:

@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-5"
     openai_embedding_model: str = "text-embedding-3-large"
     openai_timeout_seconds: float = 120.0
+    # 比較処理用のタイムアウト（環境変数で設定可能、Noneで無効化）
+    openai_comparison_timeout_seconds: float | None = None
     # セクション情報抽出用のモデル（環境変数で設定可能）
     openai_section_extraction_model: str | None = None
     # リトライ時のフォールバックモデル（環境変数で設定可能）
