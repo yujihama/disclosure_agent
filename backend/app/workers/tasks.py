@@ -194,6 +194,7 @@ def structure_document_task(document_id: str) -> dict[str, Any]:
                 detector = SectionDetector(
                     openai_client=openai_client,
                     document_type=document_type,
+                    settings=settings,
                     batch_size=10,  # 10ページずつバッチ処理
                     max_workers=5  # 最大5バッチを並列実行
                 )
@@ -206,9 +207,13 @@ def structure_document_task(document_id: str) -> dict[str, Any]:
                     metadata_store.update_processing_status(document_id, status="extracting_section_content")
                     
                     from app.services.structuring.section_content_extractor import SectionContentExtractor
+                    # YAML設定から並列数を取得
+                    section_config = settings.get_section_extraction_config()
+                    max_workers = section_config.get("max_workers", 3)
                     content_extractor = SectionContentExtractor(
                         openai_client=openai_client,
-                        max_workers=3  # 最大3セクションを並列処理
+                        settings=settings,
+                        max_workers=max_workers
                     )
                     
                     sections_with_content = content_extractor.extract_all_sections(

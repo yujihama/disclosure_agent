@@ -136,6 +136,26 @@ class SectionDetailedComparisonResponse(BaseModel):
     )
 
 
+class KPITimeSeriesComparisonResponse(BaseModel):
+    """時系列比較結果レスポンス"""
+    
+    section: str
+    indicator: str
+    time_series1: list[dict[str, Any]] = Field(default_factory=list)
+    time_series2: list[dict[str, Any]] = Field(default_factory=list)
+    changes: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class LogicalRelationshipChangeResponse(BaseModel):
+    """論理関係変化レスポンス"""
+    
+    section: str
+    change_type: Literal["added", "removed", "modified"]
+    relationship: Optional[dict[str, Any]] = None
+    previous: Optional[dict[str, Any]] = None
+    current: Optional[dict[str, Any]] = None
+
+
 class ComparisonResponse(BaseModel):
     """比較結果レスポンス"""
     
@@ -147,6 +167,14 @@ class ComparisonResponse(BaseModel):
     numerical_differences: list[NumericalDifferenceResponse] = Field(default_factory=list)
     text_differences: list[TextDifferenceResponse] = Field(default_factory=list)
     section_detailed_comparisons: list[SectionDetailedComparisonResponse] = Field(default_factory=list)
+    kpi_time_series_comparisons: list[KPITimeSeriesComparisonResponse] = Field(
+        default_factory=list,
+        description="時系列比較結果（原文記載ベース）"
+    )
+    logical_relationship_changes: list[LogicalRelationshipChangeResponse] = Field(
+        default_factory=list,
+        description="論理関係の変化"
+    )
     priority: Literal["high", "medium", "low"]
     created_at: str
 

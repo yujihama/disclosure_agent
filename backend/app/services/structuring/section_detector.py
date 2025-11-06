@@ -27,6 +27,7 @@ class SectionDetector:
         self, 
         openai_client, 
         document_type: str, 
+        settings=None,
         batch_size: int = 10,
         max_workers: int = 5
     ):
@@ -34,11 +35,14 @@ class SectionDetector:
         Args:
             openai_client: OpenAIクライアント
             document_type: 書類種別（例: "securities_report"）
+            settings: 設定オブジェクト（モデル名を取得するため）
             batch_size: 1回に処理するページ数（デフォルト10）
             max_workers: 並列実行する最大ワーカー数（デフォルト5）
         """
+        from ...core.config import get_settings
         self.openai_client = openai_client
         self.document_type = document_type
+        self.settings = settings or get_settings()
         self.batch_size = batch_size
         self.max_workers = max_workers
         
@@ -200,7 +204,7 @@ class SectionDetector:
         
         # LLM呼び出し
         response = self.openai_client.chat.completions.create(
-            model="gpt-5",
+            model=self.settings.openai_model,
             messages=[
                 {"role": "system", "content": "あなたは企業開示資料のセクション検出エキスパートです。"},
                 {"role": "user", "content": prompt}

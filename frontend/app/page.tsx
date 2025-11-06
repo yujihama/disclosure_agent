@@ -932,7 +932,7 @@ export default function HomePage() {
                       console.log("setIterativeSearchMode 呼び出し完了");
                     }}
                     disabled={isComparing}
-                    className="rounded-md border border-white/20 bg-white/5 px-2 py-1 text-xs text-white/80 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                    className="rounded-md border border-white/20 bg-white/5 px-2 py-1 text-xs text-white/80 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30 [&>option]:bg-gray-800 [&>option]:text-white"
                   >
                     <option value="off">OFF: 追加探索なし（高速）</option>
                     <option value="high_only">重要度Highのみ: 重要なセクションのみ追加探索</option>

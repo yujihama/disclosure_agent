@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Optional
 
@@ -26,13 +27,16 @@ class SectionContentExtractor:
     - 主張・メッセージ
     """
     
-    def __init__(self, openai_client, max_workers: int = 3):
+    def __init__(self, openai_client, settings=None, max_workers: int = 3):
         """
         Args:
             openai_client: OpenAIクライアント
+            settings: 設定オブジェクト（モデル名を取得するため）
             max_workers: 並列実行する最大ワーカー数（デフォルト3）
         """
+        from ...core.config import get_settings
         self.openai_client = openai_client
+        self.settings = settings or get_settings()
         self.max_workers = max_workers
     
     def extract_all_sections(
@@ -61,7 +65,10 @@ class SectionContentExtractor:
             return sections
         
         total_sections = len(sections)
-        logger.info(f"セクション情報抽出開始: {total_sections}セクションを並列処理（最大{self.max_workers}並列）")
+        model = self.settings.section_extraction_model
+        logger.info(
+            f"セクション情報抽出開始: {total_sections}セクションを並列処理（最大{self.max_workers}並列、モデル: {model}）"
+        )
         
         # 各セクションの処理準備
         section_items = []
@@ -181,7 +188,7 @@ class SectionContentExtractor:
         section_tables: list[dict],
     ) -> Optional[dict]:
         """
-        単一セクションの情報抽出
+        単一セクションの情報抽出（リトライ処理付き）
         
         Args:
             section_name: セクション名
@@ -191,51 +198,89 @@ class SectionContentExtractor:
         Returns:
             抽出された情報、またはスキップ時はNone
         """
-        try:
-            # テキストが短すぎる場合はスキップ
-            if len(section_text.strip()) < 100:
-                logger.debug(f"セクション {section_name} はテキストが短いためスキップ")
-                return None
-            
-            # テーブルサマリーを作成
-            tables_summary = self._summarize_tables(section_tables)
-            
-            # プロンプトを構築
-            prompt = self._build_extraction_prompt(
-                section_name,
-                section_text,
-                tables_summary,
-            )
-            
-            # LLM呼び出し
-            response = self.openai_client.chat.completions.create(
-                model="gpt-5",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "あなたは企業開示資料から情報を抽出するエキスパートです。要約せず、原文の情報を可能な限り保持してください。"
-                    },
-                    {"role": "user", "content": prompt}
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.1,  # 一貫性を重視
-            )
-            
-            result = json.loads(response.choices[0].message.content)
-            
-            # 結果を検証
-            extracted_content = {
-                "financial_data": result.get("financial_data", []),
-                "accounting_notes": result.get("accounting_notes", []),
-                "factual_info": result.get("factual_info", []),
-                "messages": result.get("messages", []),
-            }
-            
-            return extracted_content
-            
-        except Exception as exc:
-            logger.error(f"情報抽出処理でエラー ({section_name}): {exc}", exc_info=True)
+        # テキストが短すぎる場合はスキップ
+        if len(section_text.strip()) < 100:
+            logger.debug(f"セクション {section_name} はテキストが短いためスキップ")
             return None
+        
+        # テーブルサマリーを作成
+        tables_summary = self._summarize_tables(section_tables)
+        
+        # プロンプトを構築
+        prompt = self._build_extraction_prompt(
+            section_name,
+            section_text,
+            tables_summary,
+        )
+        
+        # 設定からリトライ設定を取得
+        section_config = self.settings.get_section_extraction_config()
+        max_retries = section_config.get("max_retries", 1)
+        retry_delay = section_config.get("retry_delay", 1.0)
+        
+        # 最初は通常のモデル、リトライ時はフォールバックモデルを使用
+        primary_model = self.settings.section_extraction_model
+        retry_model = self.settings.retry_model
+        
+        for attempt in range(max_retries + 1):
+            try:
+                # リトライ時はフォールバックモデルを使用
+                model = retry_model if attempt > 0 else primary_model
+                
+                if attempt > 0:
+                    logger.warning(
+                        f"セクション情報抽出リトライ ({section_name}): "
+                        f"試行 {attempt + 1}/{max_retries + 1}, モデル: {model}"
+                    )
+                    time.sleep(retry_delay)
+                
+                # LLM呼び出し
+                response = self.openai_client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "あなたは企業開示資料から情報を抽出するエキスパートです。要約せず、原文の情報を可能な限り保持してください。"
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={"type": "json_object"},
+                )
+                
+                result = json.loads(response.choices[0].message.content)
+                
+                # 結果を検証
+                extracted_content = {
+                    "financial_data": result.get("financial_data", []),
+                    "accounting_notes": result.get("accounting_notes", []),
+                    "factual_info": result.get("factual_info", []),
+                    "messages": result.get("messages", []),
+                    "kpi_time_series": result.get("kpi_time_series", []),
+                    "logical_relationships": result.get("logical_relationships", []),
+                    "segment_time_series": result.get("segment_time_series", []),
+                }
+                
+                if attempt > 0:
+                    logger.info(f"セクション情報抽出リトライ成功 ({section_name}): モデル {model} で処理完了")
+                
+                return extracted_content
+                
+            except Exception as exc:
+                if attempt < max_retries:
+                    logger.warning(
+                        f"セクション情報抽出でエラー ({section_name}): {exc}, "
+                        f"リトライします（残り {max_retries - attempt} 回）"
+                    )
+                    continue
+                else:
+                    logger.error(
+                        f"セクション情報抽出でエラー ({section_name}): {exc}, "
+                        f"最大リトライ回数に達しました",
+                        exc_info=True
+                    )
+                    return None
+        
+        return None
     
     def _summarize_tables(self, tables: list[dict]) -> str:
         """
@@ -312,21 +357,21 @@ class SectionContentExtractor:
 {tables_summary}
 
 【抽出タスク】
-以下の4種類の情報を抽出してください：
+以下の7種類の情報を抽出してください：
 
-1. **財務指標・数値情報** (financial_data)
+1. **財務指標・数値情報** (financial_data) - 既存
    - 売上高、利益、資産、負債、キャッシュフローなどの財務数値
    - 各数値には、項目名(item)、数値(value)、単位(unit)、期間(period)、文脈(context)を含める
    - 前年比、増減率、予測値なども文脈に含める
    - 例: {{"item": "売上高", "value": 1234567, "unit": "百万円", "period": "2024年3月期", "context": "前年同期比10%増加"}}
 
-2. **会計処理上のコメント** (accounting_notes)
+2. **会計処理上のコメント** (accounting_notes) - 既存
    - 会計方針、会計基準の変更、注記、重要な会計上の見積もりなど
    - トピック(topic)、内容(content)、種類(type)を含める
    - 原文の表現をできるだけそのまま記載
    - 例: {{"topic": "収益認識", "content": "当社は、IFRS第15号...", "type": "会計方針"}}
 
-3. **事実情報** (factual_info)
+3. **事実情報** (factual_info) - 既存
    - 会社基本情報（本社所在地、設立日、資本金、従業員数など）
    - 組織情報（役員、部門、子会社など）
    - 事業内容、製品・サービス、市場
@@ -334,7 +379,7 @@ class SectionContentExtractor:
    - カテゴリ(category)、項目(item)、値(value)を含める
    - 例: {{"category": "会社基本情報", "item": "本社所在地", "value": "東京都千代田区..."}}
 
-4. **主張・メッセージ** (messages)
+4. **主張・メッセージ** (messages) - 既存
    - 経営方針、戦略、ビジョン、目標
    - リスク認識とその対応策
    - 市場認識、機会、課題
@@ -342,6 +387,38 @@ class SectionContentExtractor:
    - 種類(type)、内容(content)、トーン(tone: positive/neutral/negative)を含める
    - 原文の表現をできるだけそのまま記載（要約禁止）
    - 例: {{"type": "戦略", "content": "当社は、デジタルトランスフォーメーション...", "tone": "positive"}}
+
+5. **時系列財務データ** (kpi_time_series) - 新規
+   - 複数年度（通常5年分）の財務指標の推移を**原文に記載されているまま**抽出
+   - 各指標には、指標名(indicator)、単位(unit)、時系列データ(time_series)を含める
+   - **重要**: CAGR、トレンド、目標値は**原文に明記されている場合のみ**抽出（自動計算禁止）
+   - 原文のコメントや注記もそのまま記載
+   - time_seriesには各期間のperiod、value、noteを含める
+   - stated_metricsには原文に記載されているCAGR、トレンド、コメントのみを含める（自動計算禁止）
+   - target_statedには原文に記載されている目標値のみを含める（自動計算禁止）
+   - 例: {{"indicator": "売上高", "unit": "百万円", "time_series": [{{"period": "2020年3月期", "value": 1000000, "note": null}}, {{"period": "2021年3月期", "value": 1050000, "note": null}}], "stated_metrics": {{"cagr_stated": "年平均成長率7.2%（原文に記載がある場合のみ）", "trend_stated": "増加傾向（原文に記載がある場合のみ）", "comment": "原文のコメントをそのまま記載"}}, "target_stated": {{"target_description": "2025年度に1,400億円を目指す（原文の表現をそのまま）", "target_value": 1400000, "target_period": "2025年3月期"}}}}
+
+6. **論理関係** (logical_relationships) - 新規
+   - 因果関係（causality）: 結果とその原因（**原文に明記されている因果関係のみ**）
+   - 条件-結果（condition_consequence）: 前提条件と結果（**原文に明記されている条件のみ**）
+   - 問題-解決（problem_solution）: 問題とその対応策（**原文に明記されている対応策のみ**）
+   - 前提-結論（premise_conclusion）: 前提と結論（**原文に明記されている論理のみ**）
+   - **重要**: 推測や解釈は行わず、原文の表現をそのまま抽出
+   - 必ず原文の該当箇所を引用（original_text）し、source_sectionを記載
+   - relationship_typeに応じて適切なフィールドを含める（subject/reason、condition/consequence、problem/solution、premise/conclusion等）
+   - confidenceはhigh/medium/lowで評価（original_textとevidenceの有無に基づく）
+   - 例（因果関係）: {{"relationship_type": "causality", "subject": "売上高の増加", "subject_category": "financial_result", "reason": "新製品の販売好調および海外市場での拡販", "reason_category": "business_driver", "evidence": "新製品Aの売上高が前年比150%、北米市場での売上が同120%", "original_text": "売上高が前年比10%増加したのは、新製品Aの販売が好調だったことと、海外市場での拡販が進んだことが主な要因です。", "confidence": "high", "source_section": "事業の状況 - 経営成績の分析"}}
+   - 例（条件-結果）: {{"relationship_type": "condition_consequence", "condition": "為替相場が1ドル=140円を超える円安で推移", "condition_category": "external_factor", "consequence": "営業利益が約30億円増加する見込み", "consequence_category": "financial_impact", "original_text": "為替相場が1ドル=140円を超える円安で推移した場合、営業利益が約30億円増加する見込みです。", "confidence": "medium", "source_section": "事業の状況 - 経営成績の分析"}}
+   - 例（問題-解決）: {{"relationship_type": "problem_solution", "problem": "サイバーセキュリティリスクの高まり", "problem_category": "risk", "solution": "CSIRT体制の構築と多層防御の実施", "solution_category": "mitigation_measure", "effectiveness": "リスクレベルを中程度に低減（原文に記載がある場合のみ）", "original_text": "サイバーセキュリティリスクに対応するため、当社はCSIRT体制を構築し、多層防御を実施しています。", "source_section": "事業の状況 - 事業等のリスク"}}
+   - 例（前提-結論）: {{"relationship_type": "premise_conclusion", "premise": "中長期的な企業価値向上を目指す", "premise_category": "management_policy", "conclusion": "ROE 10%以上を目標とする", "conclusion_category": "target_indicator", "reasoning": "株主資本の効率的活用と持続的成長の両立", "original_text": "中長期的な企業価値向上を目指し、株主資本の効率的活用と持続的成長の両立を図るため、ROE 10%以上を目標としています。", "source_section": "事業の状況 - 経営方針"}}
+
+7. **セグメント別時系列データ** (segment_time_series) - 新規
+   - セグメントごとの財務指標の推移（通常5年分）を**原文に記載されているまま**抽出
+   - セグメント名(segment_name)、指標の時系列(time_series)を含める
+   - **重要**: 構成比、成長率等は**原文に記載がある場合のみ**抽出（自動計算禁止）
+   - revenue_time_series、profit_time_series等、原文に記載されている指標ごとに時系列データを含める
+   - stated_metricsには原文に記載されている構成比、成長率、コメントのみを含める（自動計算禁止）
+   - 例: {{"segment_name": "医薬品事業", "revenue_time_series": [{{"period": "2020年3月期", "value": 400000}}, {{"period": "2021年3月期", "value": 420000}}], "profit_time_series": [{{"period": "2020年3月期", "value": 60000}}, {{"period": "2021年3月期", "value": 65000}}], "stated_metrics": {{"revenue_composition_stated": "売上構成比37.9%（原文に記載がある場合のみ）", "growth_rate_stated": "前年比4.2%増（原文に記載がある場合のみ）", "comment": "原文のコメントをそのまま記載"}}}}
 
 【出力形式】
 JSON形式で以下のように回答してください：
@@ -375,14 +452,66 @@ JSON形式で以下のように回答してください：
       "content": "原文の内容をそのまま",
       "tone": "positive/neutral/negative"
     }}
+  ],
+  "kpi_time_series": [
+    {{
+      "indicator": "指標名",
+      "unit": "単位",
+      "time_series": [
+        {{"period": "期間", "value": 数値, "note": "注記（任意）"}}
+      ],
+      "stated_metrics": {{
+        "cagr_stated": "原文に記載がある場合のみ（自動計算禁止）",
+        "trend_stated": "原文に記載がある場合のみ（自動計算禁止）",
+        "comment": "原文のコメントをそのまま"
+      }},
+      "target_stated": {{
+        "target_description": "原文の表現をそのまま",
+        "target_value": 数値,
+        "target_period": "期間"
+      }}
+    }}
+  ],
+  "logical_relationships": [
+    {{
+      "relationship_type": "causality/condition_consequence/problem_solution/premise_conclusion",
+      "original_text": "原文の該当箇所をそのまま引用（必須）",
+      "source_section": "セクション名",
+      "confidence": "high/medium/low",
+      ...（relationship_typeに応じたフィールド）
+    }}
+  ],
+  "segment_time_series": [
+    {{
+      "segment_name": "セグメント名",
+      "revenue_time_series": [
+        {{"period": "期間", "value": 数値}}
+      ],
+      "profit_time_series": [
+        {{"period": "期間", "value": 数値}}
+      ],
+      "stated_metrics": {{
+        "revenue_composition_stated": "原文に記載がある場合のみ（自動計算禁止）",
+        "growth_rate_stated": "原文に記載がある場合のみ（自動計算禁止）",
+        "comment": "原文のコメントをそのまま"
+      }}
+    }}
   ]
 }}
+
+【抽出の基本原則】★最重要★
+- **要約禁止**: 原文の表現をできるだけそのまま保持してください
+- **推測禁止**: 記載されていない情報を推測しないでください
+- **計算禁止**: 成長率、構成比、達成率等の自動計算は行わないでください
+- **引用重視**: 論理関係は必ず原文の該当箇所を引用（original_text）してください
+- **記載のみ**: 原文に記載されている情報のみを抽出してください
 
 【注意事項】
 - 該当する情報がない場合は、空の配列 [] を返してください
 - 要約せず、原文の表現を可能な限り保持してください
 - 数値情報は必ず単位と期間を明記してください
 - 長い文章でも省略せず、重要な情報は全て含めてください
+- kpi_time_series、logical_relationships、segment_time_seriesが存在しない場合は空配列を返してください
 """
         return prompt
 

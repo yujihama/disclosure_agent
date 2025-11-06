@@ -19,7 +19,7 @@ def mock_settings():
     """モック設定"""
     settings = Mock()
     settings.openai_api_key = "test-key"
-    settings.openai_model = "gpt-4"
+    settings.openai_model = "gpt-5"
     settings.openai_timeout_seconds = 30.0
     return settings
 

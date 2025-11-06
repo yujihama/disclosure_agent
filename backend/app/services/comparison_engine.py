@@ -115,6 +115,8 @@ class ComparisonResult:
     numerical_differences: list[NumericalDifference] = field(default_factory=list)
     text_differences: list[TextDifference] = field(default_factory=list)
     section_detailed_comparisons: list[SectionDetailedComparison] = field(default_factory=list)
+    kpi_time_series_comparisons: list[dict[str, Any]] = field(default_factory=list)  # 時系列比較結果
+    logical_relationship_changes: list[dict[str, Any]] = field(default_factory=list)  # 論理関係変化
     priority: Literal["high", "medium", "low"] = "medium"
     created_at: Optional[str] = None
 
@@ -384,6 +386,16 @@ JSON形式で以下のフォーマットで回答してください：
             doc1_info, doc2_info, structured1, structured2, result.section_mappings, progress_callback, mode, iterative_search_mode
         )
         
+        # 時系列比較分析を実行（原文記載ベース）
+        result.kpi_time_series_comparisons = self._compare_kpi_time_series(
+            doc1_info, doc2_info, structured1, structured2, result.section_mappings
+        )
+        
+        # 論理関係の変化分析を実行
+        result.logical_relationship_changes = self._compare_logical_relationships(
+            doc1_info, doc2_info, structured1, structured2, result.section_mappings
+        )
+        
         return result
     
     def _map_sections(
@@ -607,7 +619,7 @@ JSON形式で以下のフォーマットで回答してください：
             
             try:
                 response = self.openai_client.embeddings.create(
-                    model="text-embedding-3-small",
+                    model=self.settings.openai_embedding_model,
                     input=batch_texts,
                 )
                 
@@ -809,6 +821,251 @@ JSON形式で以下のフォーマットで回答してください：
         
         logger.info(f"数値差分検出: {len(differences)}件")
         return differences
+    
+    def _compare_kpi_time_series(
+        self,
+        doc1_info: DocumentInfo,
+        doc2_info: DocumentInfo,
+        structured1: dict[str, Any],
+        structured2: dict[str, Any],
+        section_mappings: list[SectionMapping],
+    ) -> list[dict[str, Any]]:
+        """
+        時系列財務データを比較（原文記載ベース）
+        
+        Args:
+            doc1_info: ドキュメント1の情報
+            doc2_info: ドキュメント2の情報
+            structured1: ドキュメント1の構造化データ
+            structured2: ドキュメント2の構造化データ
+            section_mappings: セクションマッピング
+            
+        Returns:
+            時系列比較結果のリスト
+        """
+        comparisons: list[dict[str, Any]] = []
+        
+        # セクションマッピングに基づいて比較
+        for mapping in section_mappings:
+            section1 = mapping.doc1_section
+            section2 = mapping.doc2_section
+            
+            # 両方のセクションから時系列データを取得
+            kpi_series1 = self._get_kpi_time_series_from_section(structured1, section1)
+            kpi_series2 = self._get_kpi_time_series_from_section(structured2, section2)
+            
+            # 同じ指標を比較
+            for kpi1 in kpi_series1:
+                indicator = kpi1.get('indicator', '')
+                # 同じ指標を探す
+                kpi2 = next(
+                    (k for k in kpi_series2 if k.get('indicator') == indicator),
+                    None
+                )
+                
+                if kpi2:
+                    comparison = self._compare_single_kpi_series(
+                        section1, indicator, kpi1, kpi2
+                    )
+                    if comparison:
+                        comparisons.append(comparison)
+        
+        logger.info(f"時系列比較完了: {len(comparisons)}件")
+        return comparisons
+    
+    def _get_kpi_time_series_from_section(
+        self,
+        structured: dict[str, Any],
+        section_name: str,
+    ) -> list[dict[str, Any]]:
+        """セクションから時系列データを取得"""
+        sections = structured.get("sections", {})
+        section = sections.get(section_name, {})
+        extracted_content = section.get("extracted_content", {})
+        return extracted_content.get("kpi_time_series", [])
+    
+    def _compare_single_kpi_series(
+        self,
+        section: str,
+        indicator: str,
+        kpi1: dict[str, Any],
+        kpi2: dict[str, Any],
+    ) -> Optional[dict[str, Any]]:
+        """単一のKPI時系列を比較"""
+        time_series1 = kpi1.get("time_series", [])
+        time_series2 = kpi2.get("time_series", [])
+        
+        if not time_series1 or not time_series2:
+            return None
+        
+        # 原文に記載されているトレンド表現の変化を検出
+        trend1 = kpi1.get("stated_metrics", {}).get("trend_stated")
+        trend2 = kpi2.get("stated_metrics", {}).get("trend_stated")
+        
+        # 原文に記載されている目標値の変化を検出
+        target1 = kpi1.get("target_stated", {})
+        target2 = kpi2.get("target_stated", {})
+        
+        # 原文に記載されているコメントの変化を検出
+        comment1 = kpi1.get("stated_metrics", {}).get("comment")
+        comment2 = kpi2.get("stated_metrics", {}).get("comment")
+        
+        changes = []
+        
+        # トレンド表現の変化
+        if trend1 != trend2:
+            changes.append({
+                "type": "trend_stated_change",
+                "previous": trend1,
+                "current": trend2,
+                "description": f"トレンド表現が「{trend1}」から「{trend2}」に変化"
+            })
+        
+        # 目標値の変化
+        if target1.get("target_description") != target2.get("target_description"):
+            changes.append({
+                "type": "target_change",
+                "previous": target1.get("target_description"),
+                "current": target2.get("target_description"),
+                "description": f"目標値の記載が変更"
+            })
+        
+        # コメントの変化
+        if comment1 != comment2:
+            changes.append({
+                "type": "comment_change",
+                "previous": comment1,
+                "current": comment2,
+                "description": f"コメントが変更"
+            })
+        
+        if not changes:
+            return None
+        
+        return {
+            "section": section,
+            "indicator": indicator,
+            "time_series1": time_series1,
+            "time_series2": time_series2,
+            "changes": changes,
+        }
+    
+    def _compare_logical_relationships(
+        self,
+        doc1_info: DocumentInfo,
+        doc2_info: DocumentInfo,
+        structured1: dict[str, Any],
+        structured2: dict[str, Any],
+        section_mappings: list[SectionMapping],
+    ) -> list[dict[str, Any]]:
+        """
+        論理関係の変化を分析
+        
+        Args:
+            doc1_info: ドキュメント1の情報
+            doc2_info: ドキュメント2の情報
+            structured1: ドキュメント1の構造化データ
+            structured2: ドキュメント2の構造化データ
+            section_mappings: セクションマッピング
+            
+        Returns:
+            論理関係変化のリスト
+        """
+        changes: list[dict[str, Any]] = []
+        
+        # セクションマッピングに基づいて比較
+        for mapping in section_mappings:
+            section1 = mapping.doc1_section
+            section2 = mapping.doc2_section
+            
+            # 両方のセクションから論理関係を取得
+            rels1 = self._get_logical_relationships_from_section(structured1, section1)
+            rels2 = self._get_logical_relationships_from_section(structured2, section2)
+            
+            # 論理関係の追加・削除・変更を検出
+            rels1_by_type = {}
+            for rel in rels1:
+                rel_type = rel.get('relationship_type', '')
+                key = self._get_relationship_key(rel)
+                rels1_by_type[key] = rel
+            
+            rels2_by_type = {}
+            for rel in rels2:
+                rel_type = rel.get('relationship_type', '')
+                key = self._get_relationship_key(rel)
+                rels2_by_type[key] = rel
+            
+            # 追加された論理関係
+            for key, rel2 in rels2_by_type.items():
+                if key not in rels1_by_type:
+                    changes.append({
+                        "section": section2,
+                        "change_type": "added",
+                        "relationship": rel2,
+                    })
+            
+            # 削除された論理関係
+            for key, rel1 in rels1_by_type.items():
+                if key not in rels2_by_type:
+                    changes.append({
+                        "section": section1,
+                        "change_type": "removed",
+                        "relationship": rel1,
+                    })
+            
+            # 変更された論理関係
+            for key in rels1_by_type:
+                if key in rels2_by_type:
+                    rel1 = rels1_by_type[key]
+                    rel2 = rels2_by_type[key]
+                    
+                    # original_textの変化を検出
+                    if rel1.get('original_text') != rel2.get('original_text'):
+                        changes.append({
+                            "section": section2,
+                            "change_type": "modified",
+                            "previous": rel1,
+                            "current": rel2,
+                        })
+        
+        logger.info(f"論理関係変化検出: {len(changes)}件")
+        return changes
+    
+    def _get_logical_relationships_from_section(
+        self,
+        structured: dict[str, Any],
+        section_name: str,
+    ) -> list[dict[str, Any]]:
+        """セクションから論理関係を取得"""
+        sections = structured.get("sections", {})
+        section = sections.get(section_name, {})
+        extracted_content = section.get("extracted_content", {})
+        return extracted_content.get("logical_relationships", [])
+    
+    def _get_relationship_key(self, rel: dict[str, Any]) -> str:
+        """論理関係のキーを生成（比較用）"""
+        rel_type = rel.get('relationship_type', '')
+        
+        # 関係タイプに応じてキーを生成
+        if rel_type == 'causality':
+            subject = rel.get('subject', '')
+            reason = rel.get('reason', '')
+            return f"{rel_type}:{subject}:{reason}"
+        elif rel_type == 'condition_consequence':
+            condition = rel.get('condition', '')
+            consequence = rel.get('consequence', '')
+            return f"{rel_type}:{condition}:{consequence}"
+        elif rel_type == 'problem_solution':
+            problem = rel.get('problem', '')
+            solution = rel.get('solution', '')
+            return f"{rel_type}:{problem}:{solution}"
+        elif rel_type == 'premise_conclusion':
+            premise = rel.get('premise', '')
+            conclusion = rel.get('conclusion', '')
+            return f"{rel_type}:{premise}:{conclusion}"
+        else:
+            # フォールバック: original_textを使用
+            return f"{rel_type}:{rel.get('original_text', '')[:100]}"
     
     def _compare_table_data(
         self,
@@ -2402,6 +2659,52 @@ B. **検索フレーズの生成**
                 msg_str = f"- {msg.get('type', '')} (トーン: {msg.get('tone', '')})\n  {msg.get('content', '')}"
                 sections.append(msg_str)
         
+        # 時系列財務データ
+        kpi_time_series = extracted_content.get("kpi_time_series", [])
+        if kpi_time_series:
+            sections.append("\n【時系列財務データ】")
+            for kpi in kpi_time_series:
+                indicator = kpi.get('indicator', '')
+                unit = kpi.get('unit', '')
+                time_series = kpi.get('time_series', [])
+                time_series_str = ", ".join([
+                    f"{ts.get('period', '')}: {ts.get('value', '')}{unit}"
+                    for ts in time_series[:5]  # 最大5年分
+                ])
+                sections.append(f"- {indicator} ({unit}): {time_series_str}")
+                stated_metrics = kpi.get('stated_metrics', {})
+                if stated_metrics:
+                    if stated_metrics.get('cagr_stated'):
+                        sections.append(f"  CAGR: {stated_metrics.get('cagr_stated')}")
+                    if stated_metrics.get('trend_stated'):
+                        sections.append(f"  トレンド: {stated_metrics.get('trend_stated')}")
+                target_stated = kpi.get('target_stated', {})
+                if target_stated.get('target_description'):
+                    sections.append(f"  目標: {target_stated.get('target_description')}")
+        
+        # 論理関係
+        logical_relationships = extracted_content.get("logical_relationships", [])
+        if logical_relationships:
+            sections.append("\n【論理関係】")
+            for rel in logical_relationships[:5]:  # 最大5件
+                rel_type = rel.get('relationship_type', '')
+                original_text = rel.get('original_text', '')[:200]  # 最大200文字
+                confidence = rel.get('confidence', 'medium')
+                sections.append(f"- {rel_type} (信頼度: {confidence})\n  {original_text}")
+        
+        # セグメント別時系列データ
+        segment_time_series = extracted_content.get("segment_time_series", [])
+        if segment_time_series:
+            sections.append("\n【セグメント別時系列データ】")
+            for seg in segment_time_series[:3]:  # 最大3セグメント
+                segment_name = seg.get('segment_name', '')
+                revenue_ts = seg.get('revenue_time_series', [])
+                revenue_str = ", ".join([
+                    f"{ts.get('period', '')}: {ts.get('value', '')}"
+                    for ts in revenue_ts[:3]  # 最大3年分
+                ])
+                sections.append(f"- {segment_name} (売上): {revenue_str}")
+        
         if not sections:
             return "（抽出された情報なし）"
         
@@ -3036,7 +3339,7 @@ B. **検索フレーズの生成**
         
         try:
             search_embedding_response = self.openai_client.embeddings.create(
-                model="text-embedding-3-small",
+                model=self.settings.openai_embedding_model,
                 input=[search_text],
             )
             search_vector = search_embedding_response.data[0].embedding
@@ -3059,7 +3362,7 @@ B. **検索フレーズの生成**
             
             try:
                 section_embedding_response = self.openai_client.embeddings.create(
-                    model="text-embedding-3-small",
+                    model=self.settings.openai_embedding_model,
                     input=[section_text],
                 )
                 section_vector = section_embedding_response.data[0].embedding

@@ -18,6 +18,8 @@ from ...schemas.comparisons import (
     ComparisonStatusResponse,
     ComparisonTaskResponse,
     DocumentInfoResponse,
+    KPITimeSeriesComparisonResponse,
+    LogicalRelationshipChangeResponse,
     NumericalDifferenceResponse,
     SectionDetailedComparisonResponse,
     SectionMappingResponse,
@@ -258,6 +260,12 @@ def get_comparison_result(
             ],
             section_detailed_comparisons=[
                 SectionDetailedComparisonResponse(**d) for d in result_dict.get('section_detailed_comparisons', [])
+            ],
+            kpi_time_series_comparisons=[
+                KPITimeSeriesComparisonResponse(**d) for d in result_dict.get('kpi_time_series_comparisons', [])
+            ],
+            logical_relationship_changes=[
+                LogicalRelationshipChangeResponse(**d) for d in result_dict.get('logical_relationship_changes', [])
             ],
             priority=result_dict.get('priority', 'medium'),
             created_at=result_dict.get('created_at', '')

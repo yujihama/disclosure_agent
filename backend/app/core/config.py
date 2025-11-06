@@ -11,7 +11,18 @@ class Settings(BaseSettings):
     api_prefix: str = "/api"
     openai_api_key: str | None = None
     openai_model: str = "gpt-5"
+    openai_embedding_model: str = "text-embedding-3-large"
     openai_timeout_seconds: float = 120.0
+    # セクション情報抽出用のモデル（環境変数で設定可能）
+    openai_section_extraction_model: str | None = None
+    # リトライ時のフォールバックモデル（環境変数で設定可能）
+    openai_retry_model: str | None = None
+    # セクション情報抽出の並列数（環境変数で設定可能）
+    section_extraction_max_workers: int = 3
+    # セクション情報抽出のリトライ回数（環境変数で設定可能）
+    section_extraction_max_retries: int = 1
+    # セクション情報抽出のリトライ待機時間（秒）（環境変数で設定可能）
+    section_extraction_retry_delay: float = 1.0
     document_classification_use_llm: bool = True
     document_classification_max_prompt_chars: int = 4000
     redis_url: str = "redis://localhost:6379/0"
@@ -28,6 +39,24 @@ class Settings(BaseSettings):
         env_prefix="APP_",
         extra="ignore",
     )
+    
+    @property
+    def section_extraction_model(self) -> str:
+        """セクション情報抽出用のモデルを返す（未設定の場合はデフォルトモデル）"""
+        return self.openai_section_extraction_model or self.openai_model
+    
+    @property
+    def retry_model(self) -> str:
+        """リトライ時のフォールバックモデルを返す（未設定の場合はデフォルトモデル）"""
+        return self.openai_retry_model or self.openai_model
+    
+    def get_section_extraction_config(self) -> dict[str, int | float]:
+        """セクション情報抽出の設定を取得"""
+        return {
+            "max_workers": self.section_extraction_max_workers,
+            "max_retries": self.section_extraction_max_retries,
+            "retry_delay": self.section_extraction_retry_delay,
+        }
 
 
 @lru_cache
