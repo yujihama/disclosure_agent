@@ -9,8 +9,8 @@ RUN npm ci
 # アプリケーションコードをコピー
 COPY . .
 
-# ポート3000を公開
-EXPOSE 3000
+# ポート9000を公開
+EXPOSE 9000
 
 # デフォルトコマンド（docker-compose.ymlでオーバーライド）
 CMD ["npm", "run", "dev"]

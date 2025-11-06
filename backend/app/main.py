@@ -40,13 +40,14 @@ def create_app() -> FastAPI:
         redoc_url=f"{config.api_prefix}/redoc",
     )
     
-    # CORS設定: フロントエンド（localhost:3000）からのリクエストを許可
+    # CORS設定: フロントエンドからのリクエストを許可
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
             "http://localhost:3000", 
             "http://localhost:3001", 
-            "http://localhost:3002"
+            "http://localhost:3002",
+            "http://localhost:9000"
         ],
         allow_credentials=True,
         allow_methods=["*"],
