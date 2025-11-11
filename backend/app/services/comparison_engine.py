@@ -462,7 +462,19 @@ JSON形式で以下のフォーマットで回答してください：
         # 両方のドキュメントに存在する共通セクションをマッピング
         common_sections = set(sections1.keys()) & set(sections2.keys())
         
+        skipped_mapping_count = 0
         for section_name in sorted(common_sections):
+            # extracted_content が両方に存在する場合のみマッピング
+            has_content1 = "extracted_content" in sections1[section_name]
+            has_content2 = "extracted_content" in sections2[section_name]
+            
+            if not (has_content1 and has_content2):
+                logger.debug(
+                    f"セクション {section_name} は extracted_content が不足しているためマッピングをスキップ"
+                )
+                skipped_mapping_count += 1
+                continue
+            
             mapping = SectionMapping(
                 doc1_section=section_name,
                 doc2_section=section_name,
@@ -471,7 +483,10 @@ JSON形式で以下のフォーマットで回答してください：
             )
             mappings.append(mapping)
         
-        logger.info(f"完全一致マッピング: {len(mappings)}個のセクション（実際に検出された共通セクションのみ）")
+        logger.info(
+            f"完全一致マッピング: {len(mappings)}個のセクション（extracted_content有り）、"
+            f"{skipped_mapping_count}個のセクションがextracted_content不足のためスキップ"
+        )
         return mappings
     
     def _create_nested_mappings(
@@ -1460,37 +1475,26 @@ JSON形式で以下のフォーマットで回答してください：
                 logger.warning(f"セクション情報が見つかりません（スキップ）: {mapping.doc1_section}")
                 return None
             
-            # 抽出された情報を取得（extracted_contentがある場合はそれを使用）
+            # 抽出された情報を取得
             extracted_content1 = section1_info.get("extracted_content", {})
             extracted_content2 = section2_info.get("extracted_content", {})
             
-            # extracted_contentがない場合は、原文を使用（後方互換性）
+            # extracted_contentがない場合は完全にスキップ
             if not extracted_content1 or not extracted_content2:
-                logger.warning(
-                    f"セクション {mapping.doc1_section} に extracted_content がありません。"
-                    "原文を使用します（非推奨）"
+                logger.info(
+                    f"セクション {mapping.doc1_section} に extracted_content がないため分析をスキップします"
                 )
-                # セクション範囲のテキストとテーブルを抽出
-                section1_text = self._extract_section_text(section1_info, all_pages1)
-                section2_text = self._extract_section_text(section2_info, all_pages2)
-                
-                section1_tables = self._extract_section_tables(section1_info, all_tables1)
-                section2_tables = self._extract_section_tables(section2_info, all_tables2)
-            else:
-                section1_text = None
-                section2_text = None
-                section1_tables = []
-                section2_tables = []
+                return None
             
-            # LLMで詳細分析
+            # extracted_contentを使用してLLMで詳細分析
             detailed = self._analyze_section_with_llm(
                 section_name=mapping.doc1_section,
                 extracted_content1=extracted_content1,
                 extracted_content2=extracted_content2,
-                text1=section1_text,  # フォールバック用
-                text2=section2_text,  # フォールバック用
-                tables1=section1_tables,  # フォールバック用
-                tables2=section2_tables,  # フォールバック用
+                text1=None,  # 原文フォールバックを廃止
+                text2=None,  # 原文フォールバックを廃止
+                tables1=[],  # 原文フォールバックを廃止
+                tables2=[],  # 原文フォールバックを廃止
                 doc1_page_range=f"{section1_info.get('start_page', '?')}-{section1_info.get('end_page', '?')}",
                 doc2_page_range=f"{section2_info.get('start_page', '?')}-{section2_info.get('end_page', '?')}",
                 document_type=doc1_info.document_type or "",
@@ -1549,21 +1553,17 @@ JSON形式で以下のフォーマットで回答してください：
             extracted_content1 = section1_info.get("extracted_content", {})
             extracted_content2 = section2_info.get("extracted_content", {})
             
-            # extracted_contentがない場合は、原文を使用（後方互換性）
+            # extracted_contentがない場合は完全にスキップ
             if not extracted_content1 or not extracted_content2:
-                logger.warning(
-                    f"セクション {mapping.doc1_section} に extracted_content がありません。"
-                    "原文を使用します（非推奨）"
+                logger.info(
+                    f"セクション {mapping.doc1_section} に extracted_content がないため分析をスキップします"
                 )
-                section1_text = self._extract_section_text(section1_info, all_pages1)
-                section2_text = self._extract_section_text(section2_info, all_pages2)
-                section1_tables = self._extract_section_tables(section1_info, all_tables1)
-                section2_tables = self._extract_section_tables(section2_info, all_tables2)
-            else:
-                section1_text = None
-                section2_text = None
-                section1_tables = []
-                section2_tables = []
+                return None
+            
+            section1_text = None
+            section2_text = None
+            section1_tables = []
+            section2_tables = []
             
             # LLMで詳細分析（追加探索の判断も含む）
             initial_analysis_result = self._analyze_section_with_llm_including_search_decision(

@@ -84,20 +84,35 @@ class SectionDetector:
         
         all_sections = {}
         
-        logger.info(f"セクション検出開始: {len(pages)}ページを{self.batch_size}ページずつ並列処理")
+        logger.info(f"セクション検出開始: {len(pages)}ページを{self.batch_size}ページずつ（1ページオーバーラップ）並列処理")
         
-        # バッチ情報を準備
+        # バッチ情報を準備（1ページオーバーラップ）
         batch_info_list = []
-        for i in range(0, len(pages), self.batch_size):
-            batch = pages[i:i + self.batch_size]
+        batch_index = 0
+        i = 0
+        
+        while i < len(pages):
+            # バッチの終了位置を計算
+            batch_end_idx = min(i + self.batch_size, len(pages))
+            batch = pages[i:batch_end_idx]
             batch_start = i + 1
-            batch_end = min(i + self.batch_size, len(pages))
+            batch_end = batch_end_idx
+            
             batch_info_list.append({
                 'batch': batch,
                 'batch_start': batch_start,
                 'batch_end': batch_end,
-                'batch_index': i // self.batch_size
+                'batch_index': batch_index
             })
+            
+            # 次のバッチの開始位置: 現在のバッチの最後の1ページから開始（オーバーラップ）
+            # ただし、最後のバッチの場合は終了
+            if batch_end_idx >= len(pages):
+                break
+            
+            # 1ページオーバーラップ: 次のバッチは現在のバッチの最後のページから開始
+            i = batch_end_idx - 1
+            batch_index += 1
         
         # バッチを並列処理
         batch_results = {}
@@ -148,7 +163,10 @@ class SectionDetector:
                 result['batch_end']
             )
         
-        logger.info(f"セクション検出完了: {len(all_sections)}個のセクションを検出")
+        # 最下層セクションから親セクションを再構築
+        all_sections = self._reconstruct_parent_sections(all_sections, pages)
+        
+        logger.info(f"セクション検出完了: {len(all_sections)}個のセクションを検出（最下層+親セクション再構築後）")
         return all_sections
     
     def _detect_batch_wrapper(self, batch_info: dict) -> dict:
@@ -217,19 +235,33 @@ class SectionDetector:
         return result
     
     def _get_section_names_from_template(self) -> list[str]:
-        """テンプレートから期待セクション名を抽出（階層を結合したフラット形式）"""
-        sections = []
+        """テンプレートから期待セクション名を抽出（最下層のみ）"""
+        all_sections = []
         
+        # 全階層を収集
         for section in self.template.get("sections", []):
             section_name = section.get("name")
             if section_name:
                 # 親セクション名を追加
-                sections.append(section_name)
+                all_sections.append(section_name)
                 
                 # サブセクション、items、さらに深い階層を再帰的に処理
-                self._extract_nested_sections(section, section_name, sections)
+                self._extract_nested_sections(section, section_name, all_sections)
         
-        return sections
+        # 最下層のみをフィルタリング（子セクションが存在しないセクション）
+        leaf_sections = []
+        for section_name in all_sections:
+            # このセクション名をプレフィックスとして持つ他のセクションが存在しないかチェック
+            has_children = any(
+                other.startswith(f"{section_name} - ") 
+                for other in all_sections 
+                if other != section_name
+            )
+            if not has_children:
+                leaf_sections.append(section_name)
+        
+        logger.debug(f"期待セクション（最下層のみ）: {len(leaf_sections)}個")
+        return leaf_sections
     
     def _build_tree_structure_from_template(self) -> str:
         """テンプレートから木構造形式のセクション構成を生成"""
@@ -408,10 +440,18 @@ class SectionDetector:
             
             if section_name in all_sections:
                 # 既存セクションの拡張（ページ跨ぎ）
-                all_sections[section_name]["end_page"] = end_page
+                # start_pageも更新（後のバッチで検出された場合に備える）
+                all_sections[section_name]["start_page"] = min(
+                    all_sections[section_name]["start_page"],
+                    start_page
+                )
+                all_sections[section_name]["end_page"] = max(
+                    all_sections[section_name]["end_page"],
+                    end_page
+                )
                 all_sections[section_name]["pages"] = list(range(
                     all_sections[section_name]["start_page"],
-                    end_page + 1
+                    all_sections[section_name]["end_page"] + 1
                 ))
                 all_sections[section_name]["is_continuing"] = is_continuing
             else:
@@ -433,6 +473,87 @@ class SectionDetector:
                     page_text = all_pages[page_num - 1].get("text", "")
                     char_count += len(page_text)
             section_info["char_count"] = char_count
+    
+    def _reconstruct_parent_sections(
+        self, 
+        leaf_sections: dict[str, dict], 
+        all_pages: list[dict]
+    ) -> dict[str, dict]:
+        """
+        最下層セクションから親セクションを再構築
+        
+        Args:
+            leaf_sections: 最下層セクションの辞書
+            all_pages: 全ページデータ
+            
+        Returns:
+            最下層セクション + 再構築された親セクションを含む辞書
+        """
+        all_sections = leaf_sections.copy()
+        
+        # 親セクションの候補を抽出（階層パスから）
+        parent_candidates = set()
+        for section_name in leaf_sections.keys():
+            parts = section_name.split(" - ")
+            # 各階層レベルで親セクション名を生成
+            for i in range(len(parts) - 1):
+                parent_name = " - ".join(parts[:i+1])
+                parent_candidates.add(parent_name)
+        
+        # 各親セクションの範囲を計算
+        reconstructed_count = 0
+        for parent_name in sorted(parent_candidates):
+            # この親セクションの子セクションを収集
+            child_pages = []
+            child_confidences = []
+            
+            for section_name, section_info in leaf_sections.items():
+                if section_name.startswith(f"{parent_name} - "):
+                    child_pages.extend(section_info.get("pages", []))
+                    child_confidences.append(section_info.get("confidence", 0.0))
+            
+            if child_pages:
+                # 親セクションが既に存在する場合は更新、存在しない場合は作成
+                if parent_name in all_sections:
+                    # 既存の親セクションと子セクションの範囲を統合
+                    existing_pages = set(all_sections[parent_name].get("pages", []))
+                    child_pages_set = set(child_pages)
+                    combined_pages = sorted(existing_pages | child_pages_set)
+                    
+                    all_sections[parent_name]["start_page"] = min(combined_pages)
+                    all_sections[parent_name]["end_page"] = max(combined_pages)
+                    all_sections[parent_name]["pages"] = combined_pages
+                    # confidenceは子セクションの平均値を使用
+                    if child_confidences:
+                        all_sections[parent_name]["confidence"] = sum(child_confidences) / len(child_confidences)
+                    all_sections[parent_name]["is_continuing"] = False
+                else:
+                    # 新規に親セクションを作成
+                    combined_pages = sorted(set(child_pages))
+                    all_sections[parent_name] = {
+                        "start_page": min(combined_pages),
+                        "end_page": max(combined_pages),
+                        "pages": combined_pages,
+                        "confidence": sum(child_confidences) / len(child_confidences) if child_confidences else 0.0,
+                        "is_continuing": False,
+                        "char_count": 0
+                    }
+                    reconstructed_count += 1
+        
+        # 再構築された親セクションの文字数を計算
+        for section_name, section_info in all_sections.items():
+            if section_name not in leaf_sections:  # 親セクションのみ
+                char_count = 0
+                for page_num in section_info.get("pages", []):
+                    if 1 <= page_num <= len(all_pages):
+                        page_text = all_pages[page_num - 1].get("text", "")
+                        char_count += len(page_text)
+                section_info["char_count"] = char_count
+        
+        if reconstructed_count > 0:
+            logger.info(f"親セクション再構築完了: {reconstructed_count}個の親セクションを追加")
+        
+        return all_sections
     
     def _create_context(self, batch_sections: dict, batch_end: int) -> Optional[dict]:
         """次のバッチのためのコンテキスト情報を作成"""

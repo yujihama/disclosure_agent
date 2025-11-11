@@ -72,7 +72,35 @@ class SectionContentExtractor:
         
         # 各セクションの処理準備
         section_items = []
+        skipped_parent_count = 0
+        exclusive_page_count = 0
+        
         for section_name, section_info in sections.items():
+            # 子セクションがあるかチェック
+            has_children = self._has_child_sections(section_name, sections)
+            
+            if has_children:
+                # 親固有のページを計算
+                exclusive_pages = self._calculate_exclusive_pages(
+                    section_name, section_info, sections
+                )
+                
+                if len(exclusive_pages) == 0:
+                    # 固有ページがない場合はスキップ
+                    logger.info(
+                        f"セクション {section_name} は子セクションで完全にカバーされているため抽出をスキップ"
+                    )
+                    skipped_parent_count += 1
+                    continue
+                else:
+                    # 固有ページのみでテキストを抽出
+                    section_info = section_info.copy()
+                    section_info["pages"] = exclusive_pages
+                    logger.info(
+                        f"セクション {section_name} は固有の{len(exclusive_pages)}ページのみ抽出"
+                    )
+                    exclusive_page_count += 1
+            
             # セクションのテキストとテーブルを抽出
             section_text = self._extract_section_text(section_info, pages)
             section_tables = self._extract_section_tables(section_info, tables)
@@ -83,6 +111,15 @@ class SectionContentExtractor:
                 'section_text': section_text,
                 'section_tables': section_tables,
             })
+        
+        if skipped_parent_count > 0:
+            logger.info(
+                f"親セクション抽出スキップ: {skipped_parent_count}個のセクションが子セクションで完全にカバーされています"
+            )
+        if exclusive_page_count > 0:
+            logger.info(
+                f"固有ページ抽出: {exclusive_page_count}個の親セクションが固有ページのみ抽出されました"
+            )
         
         # 並列処理
         processed_count = 0
@@ -129,6 +166,48 @@ class SectionContentExtractor:
             f"セクション情報抽出完了: 成功={processed_count}件, スキップ={skipped_count}件"
         )
         return sections
+    
+    def _has_child_sections(self, section_name: str, all_sections: dict) -> bool:
+        """
+        子セクションの存在チェック
+        
+        Args:
+            section_name: 対象セクション名
+            all_sections: 全セクションの辞書
+            
+        Returns:
+            True: 子セクションあり、False: なし（リーフノード）
+        """
+        prefix = f"{section_name} - "
+        return any(name.startswith(prefix) for name in all_sections.keys())
+    
+    def _calculate_exclusive_pages(
+        self, section_name: str, section_info: dict, all_sections: dict
+    ) -> list[int]:
+        """
+        セクション固有のページ（子セクションに含まれないページ）を計算
+        
+        Args:
+            section_name: 対象セクション名
+            section_info: 対象セクションの情報
+            all_sections: 全セクションの辞書
+            
+        Returns:
+            固有ページのリスト（ソート済み）
+        """
+        parent_pages = set(section_info.get("pages", []))
+        
+        # 子セクションのページを収集
+        prefix = f"{section_name} - "
+        child_pages = set()
+        for name, info in all_sections.items():
+            if name.startswith(prefix):
+                child_pages.update(info.get("pages", []))
+        
+        # 親固有のページ = 親のページ - 子のページ
+        exclusive_pages = sorted(parent_pages - child_pages)
+        
+        return exclusive_pages
     
     def _extract_section_text(
         self,
